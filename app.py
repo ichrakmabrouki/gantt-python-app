@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import uuid
 from datetime import datetime
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
@@ -17,6 +18,13 @@ from backend.database       import (
 )
 
 init_db()
+
+# ── Session ID unique par utilisateur ─────────────────────────────────────────
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = str(uuid.uuid4())
+
+SID = st.session_state["session_id"]
+
 st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -82,7 +90,6 @@ h1, h2, h3, h4,
     text-transform: uppercase !important;
 }
 
-/* ── Masthead — SYSTÈME DE PILOTAGE INDUSTRIEL (hors rectangle) ── */
 .masthead-eyebrow {
     font-family: 'Rajdhani', sans-serif !important;
     font-size: 1.15rem !important;
@@ -100,8 +107,6 @@ h1, h2, h3, h4,
     margin: 0 0 12px 0;
     border-radius: 2px;
 }
-
-/* ── Header banner (rectangle) ── */
 .header-banner {
     background: linear-gradient(90deg, #161b22 0%, #1c2333 50%, #161b22 100%);
     border: 1px solid #ff6b00;
@@ -148,8 +153,6 @@ h1, h2, h3, h4,
     margin: 0 0 20px 0;
     border: none;
 }
-
-/* ── Simulation card ── */
 .sim-card {
     background: linear-gradient(135deg, #0d1117 0%, #111827 100%);
     border: 1px solid #ff6b0044;
@@ -176,10 +179,7 @@ h1, h2, h3, h4,
     padding-bottom: 14px;
     border-bottom: 1px solid #21262d;
 }
-.sim-card-icon {
-    font-size: 20px;
-    line-height: 1;
-}
+.sim-card-icon { font-size: 20px; line-height: 1; }
 .sim-card-title {
     font-family: 'Rajdhani', sans-serif !important;
     font-size: 0.85rem !important;
@@ -441,24 +441,24 @@ label {
 </style>
 """, unsafe_allow_html=True)
 
-# ── Chargement depuis DB ───────────────────────────────────────────────────────
+# ── Chargement depuis Supabase ─────────────────────────────────────────────────
 if "data" not in st.session_state:
-    df_ops = load_operations()
+    df_ops = load_operations(SID)
     if df_ops is not None:
         st.session_state["data"] = df_ops
 
 if "df_jobs" not in st.session_state:
-    df_jobs = load_jobs()
+    df_jobs = load_jobs(SID)
     if df_jobs is not None:
         st.session_state["df_jobs"] = df_jobs
 
 if "data_kpi" not in st.session_state:
-    df_kpi = load_kpis()
+    df_kpi = load_kpis(SID)
     if df_kpi is not None:
         st.session_state["data_kpi"] = df_kpi
 
 if "prix_db" not in st.session_state:
-    st.session_state["prix_db"] = load_prix()
+    st.session_state["prix_db"] = load_prix(SID)
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
@@ -495,7 +495,7 @@ st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 if st.sidebar.button("🗑 RÉINITIALISER", key="reset_btn"):
-    clear_all()
+    clear_all(SID)
     for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
                 "kpi_params", "profit_calculated"]:
         st.session_state.pop(key, None)
@@ -573,7 +573,7 @@ if menu == "📂 Upload Data":
                 else:
                     df_clean = parse_and_clean(df_raw)
                     st.session_state["data"] = df_clean
-                    ok_db, msg_db = save_operations(df_clean)
+                    ok_db, msg_db = save_operations(df_clean, SID)
                     if not ok_db:
                         st.error(f"❌ Erreur DB : {msg_db}")
                     else:
@@ -595,7 +595,7 @@ if menu == "📂 Upload Data":
             content = opts_file.read().decode("utf-8")
             df_jobs = load_jobs_from_txt(content)
             st.session_state["df_jobs"] = df_jobs
-            ok_db, msg_db = save_jobs(df_jobs)
+            ok_db, msg_db = save_jobs(df_jobs, SID)
             if not ok_db:
                 st.error(f"❌ Erreur DB : {msg_db}")
             else:
@@ -662,7 +662,6 @@ elif menu == "📈 KPI's":
             df["JobID"]    = df["OperationID"]
             df["JobLabel"] = "OP-" + df["OperationID"].astype(str)
 
-        # ── CALCULS GLOBAUX CENTRALISÉS ────────────────────────────────────────
         makespan        = int(df["EndTime"].max() - df["StartTime"].min())
         nb_machines     = df["MachineID"].nunique()
         duree_totale    = df["Duration"].sum()
@@ -682,7 +681,6 @@ elif menu == "📈 KPI's":
             "ORDONNANCEMENT", "COÛTS PAR OF", "PROFIT & MARGE", "VISUALISATION"
         ])
 
-        # ── TAB 1 ─────────────────────────────────────────────────────────────
         with tab1:
             due_date = int(df["EndTime"].max())
 
@@ -696,7 +694,6 @@ elif menu == "📈 KPI's":
                 nb_operateurs = st.number_input(
                     "NOMBRE D'OPÉRATEURS", min_value=1, value=3, step=1,
                     key="nb_operateurs_input")
-            # Persist nb_operateurs for Tab 2 using a different key
             st.session_state["nb_operateurs_val"] = nb_operateurs
 
             st.info(f"📅 Makespan calculé automatiquement : **{due_date} min**")
@@ -761,7 +758,6 @@ elif menu == "📈 KPI's":
             jcd["En retard"] = jcd["Fin"].apply(lambda x: "⚠ OUI" if x > due_date else "✔ NON")
             st.dataframe(jcd, use_container_width=True, hide_index=True)
 
-        # ── TAB 2 ─────────────────────────────────────────────────────────────
         with tab2:
             st.markdown("<p class='section-title'>Paramètres de coût</p>",
                         unsafe_allow_html=True)
@@ -779,7 +775,6 @@ elif menu == "📈 KPI's":
                 prix_matiere_unit = st.number_input("MATIÈRE (€/UNITÉ)", min_value=0.0,
                                                      value=5.0, step=0.5, key="prix_matiere")
 
-            # Persist cost params in session_state for cross-tab use
             st.session_state["kpi_params"] = {
                 "cout_machine_h":   cout_machine_h,
                 "cout_mo_h":        cout_mo_h,
@@ -803,7 +798,6 @@ elif menu == "📈 KPI's":
                 df_cout["Coût machine (€)"] + df_cout["Coût MO (€)"] +
                 df_cout["Coût indirect (€)"] + df_cout["Coût matière (€)"], 2)
 
-            # Persist df_cout in session_state for Tab 3 and Tab 4
             st.session_state["df_cout"] = df_cout
 
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
@@ -816,7 +810,6 @@ elif menu == "📈 KPI's":
             st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
             st.dataframe(df_cout, use_container_width=True, hide_index=True)
 
-            # ── SIMULATION NOMBRE D'OPÉRATEURS ───────────────────────────────
             st.markdown("<div class='sim-card'>", unsafe_allow_html=True)
             st.markdown("""
             <div class='sim-card-header'>
@@ -830,13 +823,10 @@ elif menu == "📈 KPI's":
             nb_op_sim = st.slider("Nombre d'opérateurs (simulation)", 1, 10, nb_op_default,
                                   key="nb_op_sim")
 
-            # Aggregate cost totals from df_cout (read-only, never written back)
             cout_machine_total  = df_cout["Coût machine (€)"].sum()
             cout_indirect_total = df_cout["Coût indirect (€)"].sum()
             cout_matiere_total  = df_cout["Coût matière (€)"].sum()
             cout_mo_actuel      = df_cout["Coût MO (€)"].sum()
-
-            # Simulated MO cost: nb_op_sim operators × hourly rate × makespan in hours
             cout_mo_simule = cout_mo_h * nb_op_sim * (makespan / 60)
 
             if "data_kpi" in st.session_state and "Revenu (€)" in st.session_state["data_kpi"].columns:
@@ -846,7 +836,6 @@ elif menu == "📈 KPI's":
                 profit_simule = revenu_total - cout_machine_total - cout_mo_simule \
                                 - cout_indirect_total - cout_matiere_total
                 delta_profit  = profit_simule - profit_actuel
-
                 delta_class = "positive" if delta_profit > 0 else "negative" if delta_profit < 0 else "neutral"
                 delta_icon  = "▲" if delta_profit > 0 else "▼" if delta_profit < 0 else "▶"
 
@@ -882,9 +871,8 @@ elif menu == "📈 KPI's":
                 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                 st.info("ℹ️ Calculez d'abord le Profit & Marge (onglet 3) pour voir l'impact sur le profit.")
 
-            st.markdown("</div>", unsafe_allow_html=True)  # close sim-card
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        # ── TAB 3 ─────────────────────────────────────────────────────────────
         with tab3:
             st.markdown("<p class='section-title'>Prix de vente par job</p>",
                         unsafe_allow_html=True)
@@ -893,7 +881,6 @@ elif menu == "📈 KPI's":
             prix_vente = {}
             for i, jid in enumerate(job_ids):
                 with cols_prix[i % 5]:
-                    # Normalize key type: prix_saved may store string keys from DB
                     saved_val = prix_saved.get(jid, prix_saved.get(str(jid), 10.0))
                     prix_vente[jid] = st.number_input(
                         f"JOB {jid} (€/U)", min_value=0.0,
@@ -902,19 +889,17 @@ elif menu == "📈 KPI's":
                     )
 
             if st.button("▶ CALCULER PROFIT & MARGE"):
-                save_prix(prix_vente)
+                save_prix(prix_vente, SID)
                 st.session_state["prix_db"] = prix_vente
 
                 df_profit = df.groupby(["JobLabel", "JobID"]).agg(
                     Duree_min=("Duration", "sum")).reset_index()
 
-                # Use df_cout from session_state (computed in Tab 2)
                 if "df_cout" in st.session_state:
                     df_profit = pd.merge(df_profit,
                         st.session_state["df_cout"][["JobLabel", "Qté", "Coût total (€)"]],
                         on="JobLabel", how="left")
                 else:
-                    # df_cout not yet computed — compute it with default cost params
                     params = st.session_state.get("kpi_params", {
                         "cout_machine_h": 50.0, "cout_mo_h": 20.0,
                         "cout_indirect_h": 10.0, "prix_matiere_unit": 5.0
@@ -934,8 +919,7 @@ elif menu == "📈 KPI's":
                     df_profit = pd.merge(df_profit,
                         df_fallback[["JobLabel", "Qté", "Coût total (€)"]],
                         on="JobLabel", how="left")
-                    st.warning("⚠ Coûts calculés avec les paramètres par défaut. "
-                               "Allez dans l'onglet 'Coûts par OF' pour personnaliser.")
+                    st.warning("⚠ Coûts calculés avec les paramètres par défaut.")
 
                 df_profit["Prix vente (€/u)"] = df_profit["JobID"].map(prix_vente).fillna(0)
                 df_profit["Revenu (€)"]  = round(df_profit["Qté"] * df_profit["Prix vente (€/u)"], 2)
@@ -944,7 +928,7 @@ elif menu == "📈 KPI's":
                     df_profit["Profit (€)"] / df_profit["Revenu (€)"].replace(0, 1) * 100, 1)
 
                 st.session_state["data_kpi"] = df_profit
-                save_kpis(df_profit[["JobLabel", "Duree_min", "Profit (€)", "Marge (%)"]])
+                save_kpis(df_profit[["JobLabel", "Duree_min", "Profit (€)", "Marge (%)"]], SID)
 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 c1, c2, c3, c4 = st.columns(4)
@@ -972,14 +956,12 @@ elif menu == "📈 KPI's":
                 else:
                     st.success("✔ Tous les jobs sont rentables")
 
-        # ── TAB 4 ─────────────────────────────────────────────────────────────
         with tab4:
             import plotly.graph_objects as go
 
             st.markdown("<p class='section-title'>Visualisation des KPIs</p>",
                         unsafe_allow_html=True)
 
-            # Use centralized computed values (no recompute)
             taux_par_machine = (machine_util.values / makespan * 100).round(1)
             idle_par_machine = (100 - taux_par_machine).round(1)
 
@@ -1086,7 +1068,6 @@ elif menu == "📈 KPI's":
             if "data_kpi" in st.session_state:
                 df_kpi = st.session_state["data_kpi"]
 
-                # Guard: only show profit charts if Revenu column exists
                 if "Revenu (€)" in df_kpi.columns:
                     st.markdown(
                         "<p class='section-title' style='margin-top:8px'>Profit & Marge par job</p>",
@@ -1213,7 +1194,6 @@ elif menu == "⬇️ Download":
             buf = io.BytesIO()
             with pd.ExcelWriter(buf, engine="openpyxl") as w:
                 df_kpi.to_excel(w, sheet_name="KPIs", index=False)
-                # Guard: summary_by_job / summary_by_machine need specific columns
                 if "JobLabel" in df_kpi.columns and "Duree_min" in df_kpi.columns:
                     try:
                         summary_by_job(df_kpi).to_excel(w, sheet_name="Par Job", index=False)
@@ -1247,4 +1227,3 @@ elif menu == "⬇️ Download":
                                    "gantt.html", "text/html", use_container_width=True)
             else:
                 st.info("⚠ Chargez d'abord vos données pour exporter le Gantt")
-
