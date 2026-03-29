@@ -1,0 +1,24 @@
+OperationID,MachineID,MachineLabel,ProcessingTime,StartTime,EndTime,Duration
+19,1,Machine 1,80,0,80,80
+1,1,Machine 1,90,80,170,90
+27,1,Machine 1,180,170,350,180
+23,2,Machine 2,80,0,80,80
+10,2,Machine 2,180,80,260,180
+```
+
+---
+
+## Ordre dans VSCode
+```
+1. requirements.txt    → colle le contenu
+2. backend/__init__.py → laisser vide
+3. backend/converter.py
+4. backend/data_processor.py
+5. backend/gantt_builder.py
+6. backend/kpi_calculator.py
+7. data/sample_data.csv
+8. app.py              → en dernier
+
+Puis dans le terminal :
+pip install -r requirements.txt
+streamlit run app.py
