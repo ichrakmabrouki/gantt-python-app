@@ -1,206 +1,140 @@
-import sqlite3
+"""
+database.py — Supabase backend
+Adapté exactement à la structure de app.py existant.
+Chaque donnée est isolée par session_id pour usage multi-utilisateurs.
+"""
+
+import streamlit as st
 import pandas as pd
-
-DB_PATH = "gantt_dashboard.db"
-
-# Colonnes attendues par table (référence fixe)
-EXPECTED_COLS = {
-    "operations": {"OperationID", "MachineID", "MachineLabel",
-                   "ProcessingTime", "StartTime", "EndTime", "Duration"},
-    "jobs":       {"OperationID", "JobID", "OperationOrder"},
-    "kpis":       {"OperationID", "MachineLabel", "JobID",
-                   "JobLabel", "Duration", "Profit"},
-}
+from supabase import create_client, Client
 
 
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# ── Connexion ──────────────────────────────────────────────────────────────────
+
+@st.cache_resource
+def get_client() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
 
 def init_db():
-    """Crée les tables avec la structure fixe si elles n'existent pas encore."""
-    conn = get_connection()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS operations (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            OperationID    INTEGER NOT NULL,
-            MachineID      INTEGER NOT NULL,
-            MachineLabel   TEXT    NOT NULL,
-            ProcessingTime INTEGER,
-            StartTime      INTEGER,
-            EndTime        INTEGER,
-            Duration       INTEGER,
-            uploaded_at    TEXT DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS jobs (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            OperationID    INTEGER NOT NULL,
-            JobID          INTEGER NOT NULL,
-            OperationOrder INTEGER,
-            uploaded_at    TEXT DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS kpis (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            OperationID  INTEGER,
-            MachineLabel TEXT,
-            JobID        INTEGER,
-            JobLabel     TEXT,
-            Duration     REAL,
-            Profit       REAL,
-            computed_at  TEXT DEFAULT (datetime('now'))
-        );
-
-        CREATE TABLE IF NOT EXISTS prix_jobs (
-            JobID      INTEGER PRIMARY KEY,
-            Prix       REAL,
-            updated_at TEXT DEFAULT (datetime('now'))
-        );
-    """)
-    conn.commit()
-    conn.close()
+    """Compatibilité avec l'ancien code — ne fait rien avec Supabase."""
+    pass
 
 
-def _validate_columns(df: pd.DataFrame, table: str) -> tuple[bool, str]:
-    """Vérifie que le DataFrame contient exactement les colonnes attendues."""
-    expected = EXPECTED_COLS[table]
-    actual   = set(df.columns)
-    missing  = expected - actual
-    extra    = actual - expected
-    if missing:
-        return False, f"Colonnes manquantes dans '{table}': {missing}"
-    if extra:
-        return False, f"Colonnes inattendues dans '{table}': {extra}"
-    return True, "OK"
+# ── Helpers internes ───────────────────────────────────────────────────────────
 
-
-# ─── OPERATIONS ────────────────────────────────────────────────────────────────
-
-def save_operations(df: pd.DataFrame) -> tuple[bool, str]:
-    ok, msg = _validate_columns(df, "operations")
-    if not ok:
-        return False, msg
-    cols = list(EXPECTED_COLS["operations"])
-    conn = get_connection()
-    conn.execute("DELETE FROM operations")
-    df[cols].to_sql("operations", conn, if_exists="append", index=False)
-    conn.commit()
-    conn.close()
-    return True, "OK"
-
-
-def load_operations() -> pd.DataFrame | None:
-    conn = get_connection()
+def _upsert(table: str, session_id: str, df: pd.DataFrame) -> tuple[bool, str]:
     try:
-        df = pd.read_sql(
-            "SELECT OperationID, MachineID, MachineLabel, "
-            "ProcessingTime, StartTime, EndTime, Duration FROM operations",
-            conn
-        )
-        conn.close()
-        return df if not df.empty else None
+        client = get_client()
+        client.table(table).delete().eq("session_id", session_id).execute()
+        records = df.to_dict(orient="records")
+        payload = [{"session_id": session_id, "data": row} for row in records]
+        client.table(table).insert(payload).execute()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
+
+
+def _load(table: str, session_id: str) -> pd.DataFrame | None:
+    try:
+        client = get_client()
+        res = client.table(table).select("data").eq("session_id", session_id).execute()
+        if not res.data:
+            return None
+        rows = [r["data"] for r in res.data]
+        return pd.DataFrame(rows)
     except Exception:
-        conn.close()
         return None
 
 
-# ─── JOBS ──────────────────────────────────────────────────────────────────────
+# ── OPERATIONS ─────────────────────────────────────────────────────────────────
 
-def save_jobs(df: pd.DataFrame) -> tuple[bool, str]:
-    ok, msg = _validate_columns(df, "jobs")
-    if not ok:
-        return False, msg
-    cols = list(EXPECTED_COLS["jobs"])
-    conn = get_connection()
-    conn.execute("DELETE FROM jobs")
-    df[cols].to_sql("jobs", conn, if_exists="append", index=False)
-    conn.commit()
-    conn.close()
-    return True, "OK"
+def save_operations(df: pd.DataFrame, session_id: str) -> tuple[bool, str]:
+    return _upsert("operations", session_id, df)
 
 
-def load_jobs() -> pd.DataFrame | None:
-    conn = get_connection()
-    try:
-        df = pd.read_sql(
-            "SELECT OperationID, JobID, OperationOrder FROM jobs",
-            conn
-        )
-        conn.close()
-        return df if not df.empty else None
-    except Exception:
-        conn.close()
+def load_operations(session_id: str) -> pd.DataFrame | None:
+    df = _load("operations", session_id)
+    if df is None:
         return None
+    for col in ["OperationID", "MachineID", "ProcessingTime",
+                "StartTime", "EndTime", "Duration"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="ignore")
+    return df
 
 
-# ─── KPIs ──────────────────────────────────────────────────────────────────────
+# ── JOBS ───────────────────────────────────────────────────────────────────────
 
-def save_kpis(df: pd.DataFrame) -> tuple[bool, str]:
-    ok, msg = _validate_columns(df, "kpis")
-    if not ok:
-        return False, msg
-    cols = list(EXPECTED_COLS["kpis"])
-    conn = get_connection()
-    conn.execute("DELETE FROM kpis")
-    df[cols].to_sql("kpis", conn, if_exists="append", index=False)
-    conn.commit()
-    conn.close()
-    return True, "OK"
+def save_jobs(df: pd.DataFrame, session_id: str) -> tuple[bool, str]:
+    return _upsert("jobs", session_id, df)
 
 
-def load_kpis() -> pd.DataFrame | None:
-    conn = get_connection()
-    try:
-        df = pd.read_sql(
-            "SELECT OperationID, MachineLabel, JobID, "
-            "JobLabel, Duration, Profit FROM kpis",
-            conn
-        )
-        conn.close()
-        return df if not df.empty else None
-    except Exception:
-        conn.close()
+def load_jobs(session_id: str) -> pd.DataFrame | None:
+    df = _load("jobs", session_id)
+    if df is None:
         return None
+    for col in ["OperationID", "JobID", "OperationOrder"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="ignore")
+    return df
 
 
-# ─── PRIX PAR JOB ──────────────────────────────────────────────────────────────
+# ── KPIs ───────────────────────────────────────────────────────────────────────
 
-def save_prix(prix: dict):
-    conn = get_connection()
-    for job_id, val in prix.items():
-        conn.execute("""
-            INSERT INTO prix_jobs (JobID, Prix)
-            VALUES (?, ?)
-            ON CONFLICT(JobID) DO UPDATE SET Prix=excluded.Prix,
-                                             updated_at=datetime('now')
-        """, (int(job_id), float(val)))
-    conn.commit()
-    conn.close()
+def save_kpis(df: pd.DataFrame, session_id: str) -> tuple[bool, str]:
+    return _upsert("kpis", session_id, df)
 
 
-def load_prix() -> dict:
-    conn = get_connection()
+def load_kpis(session_id: str) -> pd.DataFrame | None:
+    df = _load("kpis", session_id)
+    if df is None:
+        return None
+    for col in ["Profit (€)", "Marge (%)", "Duree_min"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="ignore")
+    return df
+
+
+# ── PRIX ───────────────────────────────────────────────────────────────────────
+
+def save_prix(prix_dict: dict, session_id: str) -> tuple[bool, str]:
     try:
-        rows = conn.execute("SELECT JobID, Prix FROM prix_jobs").fetchall()
-        conn.close()
-        return {int(r["JobID"]): float(r["Prix"]) for r in rows}
+        client = get_client()
+        client.table("prix").delete().eq("session_id", session_id).execute()
+        client.table("prix").insert({
+            "session_id": session_id,
+            "data": prix_dict
+        }).execute()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
+
+
+def load_prix(session_id: str) -> dict:
+    try:
+        client = get_client()
+        res = (client.table("prix")
+               .select("data")
+               .eq("session_id", session_id)
+               .limit(1)
+               .execute())
+        if not res.data:
+            return {}
+        raw = res.data[0]["data"]
+        return {int(k) if str(k).isdigit() else k: v for k, v in raw.items()}
     except Exception:
-        conn.close()
         return {}
 
 
-# ─── RESET ─────────────────────────────────────────────────────────────────────
+# ── RESET ──────────────────────────────────────────────────────────────────────
 
-def clear_all():
-    conn = get_connection()
-    conn.executescript("""
-        DELETE FROM operations;
-        DELETE FROM jobs;
-        DELETE FROM kpis;
-        DELETE FROM prix_jobs;
-    """)
-    conn.commit()
-    conn.close()
+def clear_all(session_id: str) -> None:
+    client = get_client()
+    for table in ("operations", "jobs", "kpis", "prix"):
+        try:
+            client.table(table).delete().eq("session_id", session_id).execute()
+        except Exception:
+            pass
