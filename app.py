@@ -3,7 +3,7 @@ import pandas as pd
 import io
 import uuid
 from datetime import datetime
-import streamlit_authenticator as stauth
+import extra_streamlit_components as stx
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
 from backend.data_processor import load_file, validate, parse_and_clean, to_csv_bytes
@@ -22,38 +22,34 @@ init_db()
 
 st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
-# ── Authentification ────────────────────────────────────────────────────────
-credentials = {
-    "usernames": {
-        "ichrak": {
-            "name": "Ichrak",
-            "password": stauth.Hasher(["motdepasse123"]).generate()[0]
-        },
-        "user2": {
-            "name": "User2",
-            "password": stauth.Hasher(["motdepasse456"]).generate()[0]
-        }
-    }
+# ── Authentification avec cookie ───────────────────────────────────────────
+USERS = {
+    "ichrak": "motdepasse123",
+    "user2":  "motdepasse456"
 }
 
-authenticator = stauth.Authenticate(
-    credentials,
-    "gantt_dashboard",
-    "auth_key_secret",
-    cookie_expiry_days=7
-)
+cookie_manager = stx.CookieManager()
+sid_cookie = cookie_manager.get("gantt_user")
 
-name, authentication_status, username = authenticator.login("Connexion", "main")
-
-if authentication_status is False:
-    st.error("❌ Identifiant ou mot de passe incorrect")
-    st.stop()
-if authentication_status is None:
-    st.stop()
-
-authenticator.logout("🚪 Se déconnecter", "sidebar")
-SID = username
-
+if sid_cookie and sid_cookie in USERS:
+    SID = sid_cookie
+    if st.sidebar.button("🚪 Se déconnecter"):
+        cookie_manager.delete("gantt_user")
+        st.rerun()
+else:
+    st.markdown("### 🔐 Connexion")
+    username_input = st.text_input("Identifiant")
+    password_input = st.text_input("Mot de passe", type="password")
+    if st.button("Se connecter"):
+        if username_input in USERS and USERS[username_input] == password_input:
+            cookie_manager.set("gantt_user", username_input)
+            SID = username_input
+            st.rerun()
+        else:
+            st.error("❌ Identifiant ou mot de passe incorrect")
+            st.stop()
+    else:
+        st.stop()
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL (dark mode forcé)
 # ══════════════════════════════════════════════════════════════════════════════
