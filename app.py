@@ -465,6 +465,17 @@ label {
 ::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #ff6b00; }
+
+/* Fix login form - stop vibration */
+div[data-testid="stForm"] input {
+    animation: none !important;
+    transition: none !important;
+}
+div[data-testid="stForm"] .stTextInput > div > div > input {
+    animation: none !important;
+    transition: none !important;
+    border: 1px solid #30363d !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
