@@ -79,7 +79,6 @@ html, body,
         color: #c9d1d9 !important;
     }
 }
-
 [data-testid="stSidebar"] {
     background-color: #161b22 !important;
     border-right: 2px solid #ff6b00 !important;
@@ -98,7 +97,6 @@ html, body,
     transition: color 0.15s !important;
 }
 [data-testid="stSidebar"] .stRadio label:hover { color: #ff6b00 !important; }
-
 *, p, div, span, li,
 .stMarkdown p, [data-testid="stMarkdownContainer"] p {
     font-family: 'Share Tech Mono', monospace !important;
@@ -107,7 +105,6 @@ html, body,
     line-height: 1.6 !important;
     letter-spacing: 0.3px !important;
 }
-
 h1, h2, h3, h4,
 .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
     font-family: 'Rajdhani', sans-serif !important;
@@ -116,7 +113,6 @@ h1, h2, h3, h4,
     letter-spacing: 2px !important;
     text-transform: uppercase !important;
 }
-
 .masthead-eyebrow {
     font-family: 'Rajdhani', sans-serif !important;
     font-size: 1.15rem !important;
@@ -465,17 +461,6 @@ label {
 ::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #ff6b00; }
-
-/* Fix login form - stop vibration */
-div[data-testid="stForm"] input {
-    animation: none !important;
-    transition: none !important;
-}
-div[data-testid="stForm"] .stTextInput > div > div > input {
-    animation: none !important;
-    transition: none !important;
-    border: 1px solid #30363d !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
