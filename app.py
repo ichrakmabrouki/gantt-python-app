@@ -43,17 +43,16 @@ authenticator = stauth.Authenticate(
     cookie_expiry_days=7
 )
 
-name, authentication_status, username = authenticator.login("Connexion", "main")
+authenticator.login()
 
-if authentication_status is False:
+if st.session_state.get("authentication_status") is False:
     st.error("Identifiant ou mot de passe incorrect")
     st.stop()
-if authentication_status is None:
+if st.session_state.get("authentication_status") is None:
     st.stop()
 
-authenticator.logout("Se déconnecter", "sidebar")
-SID = username
-
+authenticator.logout(location="sidebar")
+SID = st.session_state.get("username")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL (dark mode forcé)
