@@ -19,13 +19,22 @@ from backend.database       import (
 
 init_db()
 
+st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
+
 # ── Session ID unique par utilisateur ─────────────────────────────────────────
 if "session_id" not in st.session_state:
-    st.session_state["session_id"] = str(uuid.uuid4())
+    st.session_state["session_id"] = None
+
+if not st.session_state["session_id"]:
+    st.markdown("### 🔐 Identifiez-vous pour accéder au dashboard")
+    sid_input = st.text_input("Entrez votre identifiant (ex: votre prénom ou email)")
+    if sid_input.strip():
+        st.session_state["session_id"] = sid_input.strip().lower()
+        st.rerun()
+    st.stop()
 
 SID = st.session_state["session_id"]
 
-st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL (dark mode forcé)
