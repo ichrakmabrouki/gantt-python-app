@@ -31,25 +31,29 @@ USERS = {
 cookie_manager = stx.CookieManager()
 sid_cookie = cookie_manager.get("gantt_user")
 
-if sid_cookie and sid_cookie in USERS:
+if not sid_cookie or sid_cookie not in USERS:
+    st.markdown("### 🔐 Connexion")
+    username_input = st.text_input("Identifiant", key="username")
+    password_input = st.text_input("Mot de passe", type="password", key="password")
+    
+    if st.button("Se connecter", key="login_btn"):
+        username_clean = username_input.strip().lower()
+        password_clean = password_input.strip()
+        
+        if username_clean in USERS and USERS[username_clean] == password_clean:
+            cookie_manager.set("gantt_user", username_clean)
+            st.success("✅ Connexion réussie !")
+            st.rerun()
+        else:
+            st.error(f"❌ Identifiant ou mot de passe incorrect")
+            st.stop()
+    else:
+        st.stop()
+else:
     SID = sid_cookie
     if st.sidebar.button("🚪 Se déconnecter"):
         cookie_manager.delete("gantt_user")
         st.rerun()
-else:
-    st.markdown("### 🔐 Connexion")
-    username_input = st.text_input("Identifiant")
-    password_input = st.text_input("Mot de passe", type="password")
-    if st.button("Se connecter"):
-        if username_input in USERS and USERS[username_input] == password_input:
-            cookie_manager.set("gantt_user", username_input)
-            SID = username_input
-            st.rerun()
-        else:
-            st.error("❌ Identifiant ou mot de passe incorrect")
-            st.stop()
-    else:
-        st.stop()
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL (dark mode forcé)
 # ══════════════════════════════════════════════════════════════════════════════
