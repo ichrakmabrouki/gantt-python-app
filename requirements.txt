@@ -1,6 +1,8 @@
-pillow==11.1.0
 streamlit==1.43.0
 pandas==2.2.3
 plotly==5.24.0
 openpyxl==3.1.5
 supabase==2.9.0
+pillow==11.1.0
+streamlit-authenticator==0.3.3
+bcrypt==4.1.3

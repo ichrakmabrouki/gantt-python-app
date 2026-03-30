@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import uuid
 from datetime import datetime
+import streamlit_authenticator as stauth
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
 from backend.data_processor import load_file, validate, parse_and_clean, to_csv_bytes
@@ -21,19 +22,37 @@ init_db()
 
 st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
-# ── Session ID unique par utilisateur ─────────────────────────────────────────
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = None
+# ── Authentification ────────────────────────────────────────────────────────
+credentials = {
+    "usernames": {
+        "ichrak": {
+            "name": "Ichrak",
+            "password": stauth.Hasher(["motdepasse123"]).generate()[0]
+        },
+        "user2": {
+            "name": "User2",
+            "password": stauth.Hasher(["motdepasse456"]).generate()[0]
+        }
+    }
+}
 
-if not st.session_state["session_id"]:
-    st.markdown("### 🔐 Identifiez-vous pour accéder au dashboard")
-    sid_input = st.text_input("Entrez votre identifiant (ex: votre prénom ou email)")
-    if sid_input.strip():
-        st.session_state["session_id"] = sid_input.strip().lower()
-        st.rerun()
+authenticator = stauth.Authenticate(
+    credentials,
+    "gantt_dashboard",
+    "auth_key_secret",
+    cookie_expiry_days=7
+)
+
+name, authentication_status, username = authenticator.login("Connexion", "main")
+
+if authentication_status is False:
+    st.error("Identifiant ou mot de passe incorrect")
+    st.stop()
+if authentication_status is None:
     st.stop()
 
-SID = st.session_state["session_id"]
+authenticator.logout("Se déconnecter", "sidebar")
+SID = username
 
 
 # ══════════════════════════════════════════════════════════════════════════════
