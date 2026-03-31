@@ -23,37 +23,51 @@ init_db()
 st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
 # ── Authentification avec cookie ───────────────────────────────────────────
+# ── Authentification avec cookie ───────────────────────────────────────────
 USERS = {
     "ichrak": "motdepasse123",
     "user2":  "motdepasse456"
 }
 
 cookie_manager = stx.CookieManager()
-sid_cookie = cookie_manager.get("gantt_user")
 
-if not sid_cookie or sid_cookie not in USERS:
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "SID" not in st.session_state:
+    st.session_state["SID"] = None
+
+# Vérifie le cookie
+sid_cookie = cookie_manager.get("gantt_user")
+if sid_cookie and sid_cookie in USERS and not st.session_state["authenticated"]:
+    st.session_state["authenticated"] = True
+    st.session_state["SID"] = sid_cookie
+
+if not st.session_state["authenticated"]:
     st.markdown("### 🔐 Connexion")
     username_input = st.text_input("Identifiant", key="username")
     password_input = st.text_input("Mot de passe", type="password", key="password")
-    
     if st.button("Se connecter", key="login_btn"):
-        username_clean = username_input.strip().lower()
-        password_clean = password_input.strip()
-        
-        if username_clean in USERS and USERS[username_clean] == password_clean:
-            cookie_manager.set("gantt_user", username_clean)
-            st.success("✅ Connexion réussie !")
+        u = username_input.strip().lower()
+        p = password_input.strip()
+        if u in USERS and USERS[u] == p:
+            cookie_manager.set("gantt_user", u)
+            st.session_state["authenticated"] = True
+            st.session_state["SID"] = u
             st.rerun()
         else:
-            st.error(f"❌ Identifiant ou mot de passe incorrect")
+            st.error("❌ Identifiant ou mot de passe incorrect")
             st.stop()
     else:
         st.stop()
-else:
-    SID = sid_cookie
-    if st.sidebar.button("🚪 Se déconnecter"):
-        cookie_manager.delete("gantt_user")
-        st.rerun()
+
+SID = st.session_state["SID"]
+
+if st.sidebar.button("🚪 Se déconnecter"):
+    cookie_manager.delete("gantt_user")
+    st.session_state["authenticated"] = False
+    st.session_state["SID"] = None
+    st.rerun()
+    
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL (dark mode forcé)
 # ══════════════════════════════════════════════════════════════════════════════
