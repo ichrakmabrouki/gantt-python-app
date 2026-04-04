@@ -6,3 +6,4 @@ supabase==2.9.0
 pillow==11.1.0
 extra-streamlit-components==0.1.60
 ortools==9.8.3296
+extra-streamlit-components
