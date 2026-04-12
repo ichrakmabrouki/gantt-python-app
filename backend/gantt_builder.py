@@ -13,15 +13,16 @@ def build_gantt(df_ops: pd.DataFrame,
                 df_jobs: pd.DataFrame = None) -> go.Figure:
     df = df_ops.copy()
 
-    # Fusion avec opts.txt si disponible
-    if df_jobs is not None and not df_jobs.empty:
-        df = pd.merge(df, df_jobs[["OperationID", "JobID"]],
-                      on="OperationID", how="left")
-        df["JobID"]    = df["JobID"].fillna(0).astype(int)
-        df["JobLabel"] = "Job " + df["JobID"].astype(str)
-    else:
-        df["JobID"]    = 0
-        df["JobLabel"] = "OP-" + df["OperationID"].astype(str)
+    # ── Fusion JobID seulement si absent ─────────────────────────────────────
+    if "JobID" not in df.columns:
+        if df_jobs is not None and not df_jobs.empty:
+            df = pd.merge(df, df_jobs[["OperationID", "JobID"]],
+                          on="OperationID", how="left")
+        else:
+            df["JobID"] = 0
+
+    df["JobID"]    = df["JobID"].fillna(0).astype(int)
+    df["JobLabel"] = "Job " + df["JobID"].astype(str)
 
     # Types
     df["MachineID"]   = df["MachineID"].astype(str)
