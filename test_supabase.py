@@ -33,8 +33,8 @@ try:
     of_map={},                # ← paramètre obligatoire manquant
     piece_map={},             # ← paramètre obligatoire manquant
     makespan=105              # ← paramètre obligatoire manquant
-)
-    )
+      )
+    
     if ok:
         print(f"✅ save_planning_jour() — OK")
     else:
