@@ -15,63 +15,104 @@ from backend.database       import (
     save_jobs,       load_jobs,
     save_kpis,       load_kpis,
     save_prix,       load_prix,
+    save_of_piece_maps, load_of_piece_maps,
+    save_planning_jour, load_planning_jours, load_planning_jour_detail,
     clear_all,
+    get_user, create_user,
 )
 
 init_db()
 
 st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
 
-# ── Authentification avec cookie ───────────────────────────────────────────
-USERS = {
-    "ichrak": "motdepasse123",
-    "user2":  "motdepasse456"
-}
-
+# ══════════════════════════════════════════════════════════════════════════════
+# ⚠️ DEBUG — VIDER LE COOKIE (À SUPPRIMER APRÈS TEST)
+# ══════════════════════════════════════════════════════════════════════════════
 cookie_manager = stx.CookieManager()
 
+with st.sidebar:
+    if st.button("🧹 Vider cookie (debug)", key="debug_clear_cookie"):
+        cookie_manager.delete("gantt_user")
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+# ══════════════════════════════════════════════════════════════════════════════
+# FIN DEBUG
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Initialisation session state ───────────────────────────────────────────
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 if "SID" not in st.session_state:
     st.session_state["SID"] = None
+if "user_role" not in st.session_state:
+    st.session_state["user_role"] = None
 
+# ── Vérifie le cookie existant ─────────────────────────────────────────────
 sid_cookie = cookie_manager.get("gantt_user")
-if sid_cookie and sid_cookie in USERS and not st.session_state["authenticated"]:
-    st.session_state["authenticated"] = True
-    st.session_state["SID"] = sid_cookie
+if sid_cookie and not st.session_state["authenticated"]:
+    user = get_user(sid_cookie)
+    if user:
+        st.session_state["authenticated"] = True
+        st.session_state["SID"]           = sid_cookie
+        st.session_state["user_role"]     = user.get("role", "user")
+    else:
+        # Cookie orphelin (ancienne session) — on le supprime
+        cookie_manager.delete("gantt_user")
 
+# ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
     st.markdown("### 🔐 Connexion")
-    username_input = st.text_input("Identifiant", key="username")
-    password_input = st.text_input("Mot de passe", type="password", key="password")
-    if st.button("Se connecter", key="login_btn"):
-        u = username_input.strip().lower()
-        p = password_input.strip()
-        if u in USERS and USERS[u] == p:
-            cookie_manager.set("gantt_user", u)
-            st.session_state["authenticated"] = True
-            st.session_state["SID"] = u
-            st.rerun()
-        else:
-            st.error("❌ Identifiant ou mot de passe incorrect")
-            st.stop()
-    else:
-        st.stop()
 
-SID = st.session_state["SID"]
+    tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
 
-if st.sidebar.button("🚪 Se déconnecter"):
-    cookie_manager.delete("gantt_user")
-    st.session_state["authenticated"] = False
-    st.session_state["SID"] = None
-    st.rerun()
+    with tab_login:
+        username_input = st.text_input("Identifiant", key="username")
+        password_input = st.text_input("Mot de passe", type="password", key="password")
+        if st.button("Se connecter", key="login_btn"):
+            u = username_input.strip().lower()
+            p = password_input.strip()
+            user = get_user(u)
+            if user and user["password"] == p:
+                cookie_manager.set("gantt_user", u)
+                st.session_state["authenticated"] = True
+                st.session_state["SID"]           = u
+                st.session_state["user_role"]     = user.get("role", "user")
+                st.rerun()
+            else:
+                st.error("❌ Identifiant ou mot de passe incorrect")
+
+    with tab_register:
+        new_user  = st.text_input("Nouvel identifiant",        key="new_username")
+        new_pass  = st.text_input("Mot de passe",  type="password", key="new_password")
+        new_pass2 = st.text_input("Confirmer le mot de passe", type="password", key="new_password2")
+        if st.button("Créer le compte", key="register_btn"):
+            u = new_user.strip().lower()
+            p = new_pass.strip()
+            if not u or not p:
+                st.error("❌ Identifiant et mot de passe obligatoires")
+            elif p != new_pass2.strip():
+                st.error("❌ Les mots de passe ne correspondent pas")
+            elif len(p) < 6:
+                st.error("❌ Mot de passe trop court (minimum 6 caractères)")
+            else:
+                ok, msg = create_user(u, p)
+                if ok:
+                    st.success(f"✔ Compte '{u}' créé — connectez-vous dans l'onglet SE CONNECTER")
+                else:
+                    st.error(f"❌ {msg}")
+
+    st.stop()
+
+# ── SID récupéré après authentification ───────────────────────────────────
+SID = st.session_state.get("SID")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono:wght@400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
 html, body,
 [data-testid="stAppViewContainer"],
 [data-testid="stAppViewContainer"] > div:first-child,
@@ -88,12 +129,13 @@ html, body,
 [data-testid="stSidebar"] * { font-family: 'Rajdhani', sans-serif !important; color: #8b949e !important; }
 [data-testid="stSidebar"] .stRadio label {
     font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important;
-    text-transform: uppercase !important; color: #8b949e !important; padding: 10px 4px !important; transition: color 0.15s !important;
+    text-transform: uppercase !important; color: #8b949e !important; padding: 10px 4px !important;
+    transition: color 0.15s !important;
 }
 [data-testid="stSidebar"] .stRadio label:hover { color: #ff6b00 !important; }
 *, p, div, span, li, .stMarkdown p, [data-testid="stMarkdownContainer"] p {
-    font-family: 'Share Tech Mono', monospace !important; color: #c9d1d9 !important;
-    font-size: 13px !important; line-height: 1.6 !important; letter-spacing: 0.3px !important;
+    font-family: 'Inter', sans-serif !important; color: #c9d1d9 !important;
+    font-size: 13px !important; line-height: 1.6 !important; letter-spacing: 0.2px !important;
 }
 h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
     font-family: 'Rajdhani', sans-serif !important; color: #ff6b00 !important;
@@ -124,24 +166,24 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
     border-left: 3px solid #ff6b00 !important; display: block !important;
 }
 .header-date {
-    font-family: 'Share Tech Mono', monospace !important; font-size: 0.8rem !important;
+    font-family: 'Inter', sans-serif !important; font-size: 0.8rem !important;
     color: #8b949e !important; text-align: right; line-height: 1.9;
 }
 .divline { height: 1px; background: linear-gradient(90deg, transparent, #ff6b0066, transparent); margin: 0 0 20px 0; border: none; }
 .page-header-bar { background: #161b22; border: 1px solid #30363d; border-left: 3px solid #ff6b00; border-radius: 4px; padding: 14px 20px; margin-bottom: 20px; }
 .page-title { font-family: 'Rajdhani', sans-serif !important; font-size: 1.1rem !important; font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin: 0 0 4px 0 !important; }
-.page-subtitle { font-family: 'Share Tech Mono', monospace !important; font-size: 0.72rem !important; color: #8b949e !important; margin: 0 !important; letter-spacing: 0.5px !important; }
+.page-subtitle { font-family: 'Inter', sans-serif !important; font-size: 0.72rem !important; color: #8b949e !important; margin: 0 !important; letter-spacing: 0.3px !important; }
 .section-title { font-family: 'Rajdhani', sans-serif !important; font-size: 0.72rem !important; font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #30363d; }
 [data-testid="stMetric"] { background: #161b22 !important; border: 1px solid #30363d !important; border-top: 3px solid #ff6b00 !important; border-radius: 4px !important; padding: 14px 16px !important; }
 [data-testid="stMetricValue"] { font-family: 'Rajdhani', sans-serif !important; color: #ff6b00 !important; font-size: 1.6rem !important; font-weight: 700 !important; }
-[data-testid="stMetricLabel"] { font-family: 'Share Tech Mono', monospace !important; color: #8b949e !important; font-size: 0.62rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
+[data-testid="stMetricLabel"] { font-family: 'Inter', sans-serif !important; color: #8b949e !important; font-size: 0.62rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
 .stButton > button { background: transparent !important; border: 1px solid #ff6b00 !important; color: #ff6b00 !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; font-size: 13px !important; letter-spacing: 2px !important; text-transform: uppercase !important; border-radius: 2px !important; padding: 8px 22px !important; transition: all 0.15s ease !important; }
 .stButton > button:hover { background: #ff6b00 !important; color: #0d1117 !important; }
 .stDownloadButton > button { background: transparent !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Rajdhani', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; border-radius: 2px !important; width: 100% !important; transition: all 0.15s ease !important; }
 .stDownloadButton > button:hover { border-color: #ff6b00 !important; color: #ff6b00 !important; }
-.stNumberInput > div > div > input, .stTextInput > div > div > input { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Share Tech Mono', monospace !important; font-size: 13px !important; border-radius: 2px !important; }
+.stNumberInput > div > div > input, .stTextInput > div > div > input { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; font-size: 13px !important; border-radius: 2px !important; }
 .stNumberInput > div > div > input:focus { border-color: #ff6b00 !important; box-shadow: 0 0 0 1px #ff6b0044 !important; }
-[data-testid="stSelectbox"] > div > div { background: #161b22 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Share Tech Mono', monospace !important; border-radius: 2px !important; }
+[data-testid="stSelectbox"] > div > div { background: #161b22 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important; }
 [data-testid="stFileUploader"] { background: #161b22 !important; border: 1px dashed #30363d !important; border-radius: 4px !important; }
 [data-testid="stFileUploader"]:hover { border-color: #ff6b00 !important; }
 .stTabs [data-baseweb="tab-list"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 2px !important; padding: 4px !important; gap: 2px !important; }
@@ -151,7 +193,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 [data-testid="stDataFrame"] { border: 1px solid #30363d !important; border-radius: 4px !important; overflow: hidden !important; background: #161b22 !important; }
 [data-testid="stAlert"] { background: #161b22 !important; border-radius: 2px !important; border-left-width: 3px !important; }
 [data-testid="stAlert"] p { color: #c9d1d9 !important; font-size: 12px !important; }
-.status-badge { background: #0f2a1a; border: 1px solid #238636; border-radius: 2px; padding: 5px 10px; font-family: 'Share Tech Mono', monospace !important; font-size: 11px !important; color: #3fb950 !important; margin: 4px 0; display: block; letter-spacing: 0.5px; }
+.status-badge { background: #0f2a1a; border: 1px solid #238636; border-radius: 2px; padding: 5px 10px; font-family: 'Inter', sans-serif !important; font-size: 11px !important; color: #3fb950 !important; margin: 4px 0; display: block; letter-spacing: 0.5px; }
 .status-badge-teal { background: #0d1b2a; border: 1px solid #1f6feb; color: #58a6ff !important; }
 .dl-card { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 28px 20px 20px; text-align: center; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .dl-icon { font-size: 26px; }
@@ -165,23 +207,28 @@ label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !importa
 """, unsafe_allow_html=True)
 
 # ── Chargement depuis Supabase ─────────────────────────────────────────────────
-if "data" not in st.session_state:
+if SID and "data" not in st.session_state:
     df_ops = load_operations(SID)
     if df_ops is not None:
         st.session_state["data"] = df_ops
 
-if "df_jobs" not in st.session_state:
+if SID and "df_jobs" not in st.session_state:
     df_jobs = load_jobs(SID)
     if df_jobs is not None:
         st.session_state["df_jobs"] = df_jobs
 
-if "data_kpi" not in st.session_state:
+if SID and "data_kpi" not in st.session_state:
     df_kpi = load_kpis(SID)
     if df_kpi is not None:
         st.session_state["data_kpi"] = df_kpi
 
-if "prix_db" not in st.session_state:
+if SID and "prix_db" not in st.session_state:
     st.session_state["prix_db"] = load_prix(SID)
+
+if SID and "of_map" not in st.session_state:
+    of_map_db, piece_map_db = load_of_piece_maps(SID)
+    st.session_state["of_map"]    = of_map_db
+    st.session_state["piece_map"] = piece_map_db
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
@@ -201,8 +248,12 @@ menu = st.sidebar.radio("", [
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
-# ── Statuts en sidebar ─────────────────────────────────────────────────────────
+# ── Statuts ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("<div style='margin-top:4px'>", unsafe_allow_html=True)
+st.sidebar.markdown(
+    f"<span class='status-badge' style='background:#1a1200;border-color:#ff6b00;"
+    f"color:#ff6b00'>👤 {SID}</span>",
+    unsafe_allow_html=True)
 if "data" in st.session_state:
     st.sidebar.markdown(
         f"<span class='status-badge'>✔ {len(st.session_state['data'])} OPÉRATIONS</span>",
@@ -220,7 +271,7 @@ st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
-# ── Clôture de journée ─────────────────────────────────────────────────────────
+# ── Clôture journée ────────────────────────────────────────────────────────────
 if "data" in st.session_state:
     st.sidebar.markdown("""
     <p style='font-family:Rajdhani,sans-serif;font-size:0.6rem;font-weight:700;
@@ -230,11 +281,16 @@ if "data" in st.session_state:
                                           key="jour_cloture_date")
     if st.sidebar.button("💾 CLÔTURER CE JOUR", key="cloture_btn"):
         try:
-            from backend.database import save_planning_jour
+            df_ops_cl    = st.session_state["data"]
+            df_jobs_cl   = st.session_state.get("df_jobs", pd.DataFrame())
+            of_map_cl    = st.session_state.get("of_map", {})
+            piece_map_cl = st.session_state.get("piece_map", {})
+            makespan_cl  = int(df_ops_cl["EndTime"].max())
+            label_cl     = f"Planning {jour_cloture.strftime('%d/%m/%Y')}"
             ok, msg = save_planning_jour(
-                SID, jour_cloture,
-                st.session_state["data"],
-                st.session_state.get("df_jobs", pd.DataFrame())
+                session_id=SID, jour=str(jour_cloture), label=label_cl,
+                df_ops=df_ops_cl, df_jobs=df_jobs_cl,
+                of_map=of_map_cl, piece_map=piece_map_cl, makespan=makespan_cl,
             )
             if ok:
                 st.sidebar.success(f"✔ Jour {jour_cloture} sauvegardé")
@@ -245,13 +301,23 @@ if "data" in st.session_state:
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
-if st.sidebar.button("🗑 RÉINITIALISER", key="reset_btn"):
-    clear_all(SID)
-    for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
-                "kpi_params", "profit_calculated"]:
-        st.session_state.pop(key, None)
-    st.rerun()
+# ── Boutons réinitialiser et déconnecter ───────────────────────────────────────
+col_s1, col_s2 = st.sidebar.columns(2)
+with col_s1:
+    if st.button("🗑 RESET", key="reset_btn"):
+        clear_all(SID)
+        for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
+                    "kpi_params", "of_map", "piece_map"]:
+            st.session_state.pop(key, None)
+        st.rerun()
+with col_s2:
+    if st.button("🚪 QUITTER", key="logout_btn"):
+        cookie_manager.delete("gantt_user")
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
+# ── Page labels ────────────────────────────────────────────────────────────────
 PAGE_LABELS = {
     "📂 Upload Data":   "Upload Data",
     "📅 Gantt Diagram": "Gantt Diagram",
@@ -281,19 +347,21 @@ st.markdown(f"""
 <div class="divline"></div>
 """, unsafe_allow_html=True)
 
-# ── Helper charts ──────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 def chart_layout(**kwargs):
     base = dict(
         paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
-        font=dict(color="#c9d1d9", family="Share Tech Mono", size=11),
+        font=dict(color="#c9d1d9", family="Inter", size=11),
         margin=dict(l=10, r=10, t=30, b=10),
         yaxis=dict(gridcolor="#21262d"), xaxis=dict(gridcolor="#21262d"),
     )
     base.update(kwargs)
     return base
 
-# ── Helper label Pièce ─────────────────────────────────────────────────────────
-def piece_label(job_id):
+def piece_label(job_id: int) -> str:
+    piece_map = st.session_state.get("piece_map", {})
+    if piece_map and job_id in piece_map:
+        return f"P{job_id} — {piece_map[job_id]}"
     return f"Pièce {job_id}"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -303,68 +371,7 @@ if menu == "📂 Upload Data":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>⬆ UPLOAD DATA</p>
-        <p class='page-subtitle'>Importez les fichiers de planification machine et de mapping pièces.
-        Les données sont automatiquement persistées en base.</p>
-    </div>""", unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2, gap="large")
-
-    with col1:
-        st.markdown("<p class='section-title'>◈ Fichier Machines</p>", unsafe_allow_html=True)
-        mchs_file = st.file_uploader("mchs_CP.txt · CSV · Excel",
-                                     type=["txt", "csv", "xlsx", "xls"])
-        if mchs_file:
-            try:
-                if mchs_file.name.endswith(".txt"):
-                    content = mchs_file.read().decode("utf-8")
-                    df_raw  = convert_txt_to_df(content)
-                else:
-                    df_raw = load_file(mchs_file)
-                ok, msg = validate(df_raw)
-                if not ok:
-                    st.error(f"❌ {msg}")
-                else:
-                    df_clean = parse_and_clean(df_raw)
-                    st.session_state["data"] = df_clean
-                    ok_db, msg_db = save_operations(df_clean, SID)
-                    if not ok_db:
-                        st.error(f"❌ Erreur DB : {msg_db}")
-                    else:
-                        st.success(f"✔ {len(df_clean)} opérations chargées et sauvegardées")
-                    st.dataframe(df_clean, use_container_width=True)
-            except Exception as e:
-                st.error(f"Erreur : {e}")
-        elif "data" in st.session_state:
-            st.markdown("<span class='status-badge'>⬡ DONNÉES EN MÉMOIRE</span>",
-                        unsafe_allow_html=True)
-            st.dataframe(st.session_state["data"], use_container_width=True)
-
-    with col2:
-        st.markdown("<p class='section-title'>◈ Fichier Pièces (opts.txt)</p>",
-                    unsafe_allow_html=True)
-        opts_file = st.file_uploader("opts.txt — mapping opération → pièce",
-                                     type=["txt"], key="opts")
-        if opts_file:
-            content = opts_file.read().decode("utf-8")
-            df_jobs = load_jobs_from_txt(content)
-            st.session_state["df_jobs"] = df_jobs
-            ok_db, msg_db = save_jobs(df_jobs, SID)
-            if not ok_db:
-                st.error(f"❌ Erreur DB : {msg_db}")
-            else:
-                st.success(f"✔ {df_jobs['JobID'].nunique()} pièces · {len(df_jobs)} opérations sauvegardées")
-            st.dataframe(df_jobs, use_container_width=True)
-        elif "df_jobs" in st.session_state:
-            st.markdown("<span class='status-badge status-badge-teal'>⬡ PIÈCES EN MÉMOIRE</span>",
-                        unsafe_allow_html=True)
-            st.dataframe(st.session_state["df_jobs"], use_container_width=True)
-
-    # ── Section OR-Tools ───────────────────────────────────────────────────────
-    st.markdown("<hr style='border-color:#30363d;margin:28px 0'>", unsafe_allow_html=True)
-    st.markdown("""
-    <div class='page-header-bar'>
-        <p class='page-title'>⚙ OPTIMISATION OR-TOOLS</p>
-        <p class='page-subtitle'>Uploadez votre fichier Excel (template) ou lancez avec les données de test intégrées.</p>
+        <p class='page-subtitle'>Uploadez votre fichier Excel template et lancez l'optimisation.</p>
     </div>""", unsafe_allow_html=True)
 
     col_upload, col_btn = st.columns([3, 1])
@@ -400,10 +407,17 @@ if menu == "📂 Upload Data":
             st.error(f"❌ Impossible de lire le fichier : {e}")
     else:
         st.markdown("""
-        <p style='color:#8b949e;font-size:12px;font-family:Share Tech Mono,monospace'>
-        ▸ Sans fichier uploadé, le solveur utilise les <b style='color:#ff6b00'>données de test intégrées</b>
+        <p style='color:#8b949e;font-size:12px;font-family:Inter,sans-serif'>
+        ▸ Sans fichier uploadé, le solveur utilise les
+        <b style='color:#ff6b00'>données de test intégrées</b>
         (13 pièces · 15 machines · 30 opérations · 6 techniciens · cte=15 min).
         </p>""", unsafe_allow_html=True)
+
+    if "data" in st.session_state:
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        st.markdown("<span class='status-badge'>⬡ DONNÉES EN MÉMOIRE</span>",
+                    unsafe_allow_html=True)
+        st.dataframe(st.session_state["data"], use_container_width=True)
 
     if run_solver:
         from backend.solver.input_parser import (parse_excel_to_dict,
@@ -413,7 +427,8 @@ if menu == "📂 Upload Data":
 
         if "excel_data_cache" in st.session_state:
             try:
-                solver_data = parse_excel_to_dict(io.BytesIO(st.session_state["excel_data_cache"]))
+                solver_data = parse_excel_to_dict(
+                    io.BytesIO(st.session_state["excel_data_cache"]))
             except Exception as e:
                 st.error(f"❌ Erreur lecture Excel : {e}")
                 st.stop()
@@ -428,16 +443,22 @@ if menu == "📂 Upload Data":
 
         with st.spinner("⚙ Résolution en cours — cela peut prendre jusqu'à 10 minutes..."):
             try:
-                df_result = solve_flexible_jobshop(solver_data)
-
+                df_result  = solve_flexible_jobshop(solver_data)
                 gammes_map = {g[0]: g[1] for g in solver_data["gammes"]}
-                df_result["JobID"]    = df_result["OperationID"].map(gammes_map).fillna(0).astype(int)
-                df_result["JobLabel"] = df_result["JobID"].apply(piece_label)
+                df_result["JobID"] = df_result["OperationID"].map(
+                    gammes_map).fillna(0).astype(int)
+
+                of_map    = solver_data.get("of_map", {})
+                piece_map = solver_data.get("piece_map", {})
+                st.session_state["of_map"]    = of_map
+                st.session_state["piece_map"] = piece_map
+                save_of_piece_maps(of_map, piece_map, SID)
 
                 st.session_state["data"] = df_result
                 save_operations(df_result, SID)
 
-                rows_jobs    = [{"OperationID": g[0], "JobID": g[1]} for g in solver_data["gammes"]]
+                rows_jobs    = [{"OperationID": g[0], "JobID": g[1]}
+                                for g in solver_data["gammes"]]
                 df_jobs_auto = pd.DataFrame(rows_jobs)
                 st.session_state["df_jobs"] = df_jobs_auto
                 save_jobs(df_jobs_auto, SID)
@@ -476,16 +497,17 @@ elif menu == "📅 Gantt Diagram":
     if "data" not in st.session_state:
         st.info("⚠ Chargez d'abord vos données dans Upload Data")
     else:
-        df_ops  = st.session_state["data"].copy()
-        df_jobs = st.session_state.get("df_jobs", None)
+        df_ops    = st.session_state["data"].copy()
+        df_jobs   = st.session_state.get("df_jobs", None)
+        of_map    = st.session_state.get("of_map", {})
+        piece_map = st.session_state.get("piece_map", {})
 
         if "JobID" not in df_ops.columns:
             if df_jobs is not None and not df_jobs.empty:
                 df_ops = pd.merge(df_ops, df_jobs[["OperationID", "JobID"]],
                                   on="OperationID", how="left")
             df_ops["JobID"] = df_ops.get("JobID", 0)
-        df_ops["JobID"]    = df_ops["JobID"].fillna(0).astype(int)
-        df_ops["JobLabel"] = df_ops["JobID"].apply(piece_label)
+        df_ops["JobID"] = df_ops["JobID"].fillna(0).astype(int)
 
         col_sel, _ = st.columns([2, 5])
         with col_sel:
@@ -496,10 +518,8 @@ elif menu == "📅 Gantt Diagram":
             sel = st.selectbox("FILTRER PAR MACHINE", machines)
 
         df_f = df_ops if sel == "Toutes" else df_ops[df_ops["MachineLabel"] == sel]
-        fig  = build_gantt(df_f, df_jobs)
+        fig  = build_gantt(df_f, df_jobs, of_map=of_map, piece_map=piece_map)
         fig.update_layout(**chart_layout())
-        fig.update_xaxes(color="#8b949e")
-        fig.update_yaxes(color="#8b949e")
         st.plotly_chart(fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -547,15 +567,13 @@ elif menu == "📈 KPI's":
             "ORDONNANCEMENT", "COÛTS PAR OF", "PROFIT & MARGE", "VISUALISATION"
         ])
 
-        # ── TAB 1 ─────────────────────────────────────────────────────────────
         with tab1:
             due_date = int(df["EndTime"].max())
             col_p1, col_p2 = st.columns(2)
             with col_p1:
                 start_time_day = st.number_input(
                     "DÉBUT JOURNÉE (MIN DEPUIS 00H00)",
-                    min_value=0, value=360, step=10, help="Ex: 360 = 06h00",
-                    key="start_time_day")
+                    min_value=0, value=360, step=10, key="start_time_day")
             with col_p2:
                 nb_operateurs = st.number_input(
                     "NOMBRE D'OPÉRATEURS", min_value=1, value=3, step=1,
@@ -584,9 +602,9 @@ elif menu == "📈 KPI's":
 
             st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
             st.markdown("<p class='section-title'>🧠 Recommandations</p>", unsafe_allow_html=True)
-            if taux_idle > 25:      st.write("➡️ Réduire le nombre de machines ou regrouper les tâches")
+            if taux_idle > 25:       st.write("➡️ Réduire le nombre de machines ou regrouper les tâches")
             if taux_util_moyen < 50: st.write("➡️ Augmenter la charge ou revoir planification")
-            if jobs_en_retard > 0:  st.write("➡️ Prioriser les pièces critiques ou ajuster séquencement")
+            if jobs_en_retard > 0:   st.write("➡️ Prioriser les pièces critiques ou ajuster séquencement")
 
             score = max(0, min(100, round((taux_util_moyen - taux_idle - taux_retard), 1)))
             st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -610,7 +628,6 @@ elif menu == "📈 KPI's":
             jcd["En retard"] = jcd["Fin"].apply(lambda x: "⚠ OUI" if x > due_date else "✔ NON")
             st.dataframe(jcd, use_container_width=True, hide_index=True)
 
-        # ── TAB 2 — COÛTS (sans simulation opérateurs) ───────────────────────
         with tab2:
             st.markdown("<p class='section-title'>Paramètres de coût</p>", unsafe_allow_html=True)
             col1, col2, col3, col4 = st.columns(4)
@@ -662,10 +679,10 @@ elif menu == "📈 KPI's":
             st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
             st.dataframe(
                 df_cout[["Pièce", "Nb_Ops", "Duree_min", "Coût machine (€)",
-                          "Coût MO (€)", "Coût indirect (€)", "Coût matière (€)", "Coût total (€)"]],
+                          "Coût MO (€)", "Coût indirect (€)",
+                          "Coût matière (€)", "Coût total (€)"]],
                 use_container_width=True, hide_index=True)
 
-        # ── TAB 3 — PROFIT & MARGE ────────────────────────────────────────────
         with tab3:
             st.markdown("<p class='section-title'>Prix de vente par pièce</p>", unsafe_allow_html=True)
             job_ids   = sorted(df["JobID"].unique())
@@ -711,11 +728,11 @@ elif menu == "📈 KPI's":
                         on="JobLabel", how="left")
                     st.warning("⚠ Coûts calculés avec les paramètres par défaut.")
 
-                df_profit["Pièce"]           = df_profit["JobLabel"]
+                df_profit["Pièce"]            = df_profit["JobLabel"]
                 df_profit["Prix vente (€/u)"] = df_profit["JobID"].map(prix_vente).fillna(0)
-                df_profit["Revenu (€)"]       = round(df_profit["Qté"] * df_profit["Prix vente (€/u)"], 2)
-                df_profit["Profit (€)"]       = round(df_profit["Revenu (€)"] - df_profit["Coût total (€)"], 2)
-                df_profit["Marge (%)"]        = round(
+                df_profit["Revenu (€)"]        = round(df_profit["Qté"] * df_profit["Prix vente (€/u)"], 2)
+                df_profit["Profit (€)"]        = round(df_profit["Revenu (€)"] - df_profit["Coût total (€)"], 2)
+                df_profit["Marge (%)"]         = round(
                     df_profit["Profit (€)"] / df_profit["Revenu (€)"].replace(0, 1) * 100, 1)
 
                 st.session_state["data_kpi"] = df_profit
@@ -747,7 +764,6 @@ elif menu == "📈 KPI's":
                 else:
                     st.success("✔ Toutes les pièces sont rentables")
 
-        # ── TAB 4 — VISUALISATION ─────────────────────────────────────────────
         with tab4:
             import plotly.graph_objects as go
 
@@ -766,7 +782,7 @@ elif menu == "📈 KPI's":
 
             st.markdown(
                 "<p class='section-title'>Taux d'utilisation par machine"
-                " &nbsp;<span style='font-family:Share Tech Mono,monospace;font-weight:400;"
+                " &nbsp;<span style='font-family:Inter,sans-serif;font-weight:400;"
                 "font-size:10px;color:#8b949e;text-transform:none;letter-spacing:0'>"
                 "🟢 ≥75% · 🔵 50-75% · 🟠 25-50% · 🔴 &lt;25%"
                 "</span></p>", unsafe_allow_html=True)
@@ -776,7 +792,7 @@ elif menu == "📈 KPI's":
                 name="Utilisation (%)", x=machine_util.index.tolist(), y=taux_par_machine,
                 marker_color=colors_util, marker_line=dict(width=0),
                 text=[f"{v}%" for v in taux_par_machine], textposition="inside",
-                textfont=dict(color="#ffffff", size=11, family="Share Tech Mono")
+                textfont=dict(color="#ffffff", size=11, family="Inter")
             ))
             fig_util.add_trace(go.Bar(
                 name="Idle (%)", x=machine_util.index.tolist(), y=idle_par_machine,
@@ -784,9 +800,9 @@ elif menu == "📈 KPI's":
                 text=[f"{v}%" for v in idle_par_machine], textposition="inside",
                 textfont=dict(color="#8b949e", size=10)
             ))
-            fig_util.add_hline(y=75, line_dash="dot", line_color="#3fb950", line_width=1.2,
+            fig_util.add_hline(y=75, line_dash="dot", line_color="#ffffff", line_width=1.8,
                 annotation_text="Seuil 75%",
-                annotation_font_color="#3fb950", annotation_font_size=10)
+                annotation_font_color="#ffffff", annotation_font_size=10)
             fig_util.update_layout(**chart_layout(
                 barmode="stack", height=320,
                 legend=dict(orientation="h", y=1.1, font=dict(color="#c9d1d9", size=11)),
@@ -804,7 +820,7 @@ elif menu == "📈 KPI's":
                     marker=dict(colors=["#ff6b00", "rgba(48,54,61,0.5)"],
                                 line=dict(color="#161b22", width=3)),
                     textinfo="label+percent",
-                    textfont=dict(size=11, color="#c9d1d9", family="Share Tech Mono"),
+                    textfont=dict(size=11, color="#c9d1d9", family="Inter"),
                 ))
                 center_color = ("#3fb950" if taux_util_moyen >= 75
                                 else "#ff6b00" if taux_util_moyen >= 50 else "#f59e0b")
@@ -825,11 +841,12 @@ elif menu == "📈 KPI's":
                     marker_color=colors_cycle, marker_line=dict(width=0),
                     text=[f"{v} min" for v in job_cycle["CycleTime"].tolist()],
                     textposition="outside",
-                    textfont=dict(color="#c9d1d9", size=10, family="Share Tech Mono")
+                    textfont=dict(color="#c9d1d9", size=10, family="Inter")
                 ))
-                fig_cycle.add_hline(y=cycle_mean, line_dash="dash", line_color="#f59e0b", line_width=1.5,
+                fig_cycle.add_hline(y=cycle_mean, line_dash="dash",
+                    line_color="#ffffff", line_width=2,
                     annotation_text=f"Moy : {cycle_mean:.0f} min",
-                    annotation_font_color="#f59e0b", annotation_font_size=10)
+                    annotation_font_color="#ffffff", annotation_font_size=10)
                 fig_cycle.update_layout(**chart_layout(
                     height=300,
                     yaxis=dict(title="Minutes", gridcolor="#21262d", color="#8b949e"),
@@ -844,7 +861,8 @@ elif menu == "📈 KPI's":
                         "<p class='section-title' style='margin-top:8px'>Profit & Marge par pièce</p>",
                         unsafe_allow_html=True)
                     col_g3, col_g4 = st.columns(2)
-                    piece_labels_list = df_kpi.get("Pièce", df_kpi["JobLabel"]).tolist()
+                    piece_labels_list = df_kpi["Pièce"].tolist() if "Pièce" in df_kpi.columns \
+                                        else df_kpi["JobLabel"].tolist()
 
                     with col_g3:
                         colors_profit = ["#3fb950" if v >= 0 else "#f85149"
@@ -855,7 +873,7 @@ elif menu == "📈 KPI's":
                             marker_color=colors_profit, marker_line=dict(width=0),
                             text=[f"{v:.1f}€" for v in df_kpi["Profit (€)"]],
                             textposition="outside",
-                            textfont=dict(size=10, color="#c9d1d9", family="Share Tech Mono")
+                            textfont=dict(size=10, color="#c9d1d9", family="Inter")
                         ))
                         fig_profit.add_hline(y=0, line_color="#30363d", line_width=1.2)
                         fig_profit.update_layout(**chart_layout(
@@ -876,14 +894,15 @@ elif menu == "📈 KPI's":
                             marker_color=colors_marge, marker_line=dict(width=0),
                             text=[f"{v:.1f}%" for v in df_kpi["Marge (%)"]],
                             textposition="outside",
-                            textfont=dict(size=10, color="#c9d1d9", family="Share Tech Mono")
+                            textfont=dict(size=10, color="#c9d1d9", family="Inter")
                         ))
                         max_marge = df_kpi["Marge (%)"].max()
                         fig_marge.add_hrect(y0=20, y1=max(max_marge * 1.3, 25),
-                            fillcolor="rgba(63,185,80,0.06)", line_width=0)
-                        fig_marge.add_hline(y=20, line_dash="dash", line_color="#3fb950", line_width=1.2,
+                            fillcolor="rgba(0,188,212,0.05)", line_width=0)
+                        fig_marge.add_hline(y=20, line_dash="dash",
+                            line_color="#00bcd4", line_width=1.8,
                             annotation_text="Seuil 20%",
-                            annotation_font_color="#3fb950", annotation_font_size=10)
+                            annotation_font_color="#00bcd4", annotation_font_size=10)
                         fig_marge.add_hline(y=0, line_color="#30363d", line_width=1)
                         fig_marge.update_layout(**chart_layout(
                             height=300,
@@ -906,7 +925,7 @@ elif menu == "📈 KPI's":
                         ("Coût indirect (€)", "#f59e0b"),
                         ("Coût matière (€)",  "#f0883e"),
                     ]
-                    x_labels = dc.get("Pièce", dc["JobLabel"]).tolist() if "Pièce" in dc.columns else dc["JobLabel"].tolist()
+                    x_labels = dc["Pièce"].tolist() if "Pièce" in dc.columns else dc["JobLabel"].tolist()
                     for col_name, col_color in cost_items:
                         if col_name in dc.columns:
                             fig_cout.add_trace(go.Bar(
@@ -935,79 +954,90 @@ elif menu == "📋 Historique":
     </div>""", unsafe_allow_html=True)
 
     try:
-        from backend.database import load_planning_jours
         jours = load_planning_jours(SID)
 
         if not jours:
-            st.info("⚠ Aucun planning sauvegardé. Utilisez '💾 CLÔTURER CE JOUR' dans la sidebar après avoir généré un planning.")
+            st.info("⚠ Aucun planning sauvegardé. Utilisez '💾 CLÔTURER CE JOUR' dans la sidebar.")
         else:
             st.markdown(f"<p class='section-title'>{len(jours)} JOUR(S) SAUVEGARDÉ(S)</p>",
                         unsafe_allow_html=True)
 
-            for idx, jour_data in enumerate(sorted(jours, key=lambda x: x['jour'], reverse=True)):
-                jour_str = str(jour_data['jour'])
-                ops_list = jour_data.get('operations', [])
-                nb_ops   = len(ops_list)
+            for idx, jour_data in enumerate(
+                    sorted(jours, key=lambda x: x['jour'], reverse=True)):
+                jour_str   = str(jour_data['jour'])
+                label      = jour_data.get('label', jour_str)
+                makespan_h = jour_data.get('makespan', '—')
 
-                with st.expander(f"📅 {jour_str} — {nb_ops} opérations", expanded=(idx == 0)):
+                with st.expander(f"📅 {label} — Makespan : {makespan_h} min",
+                                 expanded=(idx == 0)):
+                    detail = load_planning_jour_detail(SID, jour_str)
+                    if detail is None:
+                        st.warning("Impossible de charger le détail.")
+                        continue
+
+                    df_hist = detail["df_ops"]
+                    df_j_h  = detail["df_jobs"]
+                    pm_h    = detail.get("piece_map", {})
+                    of_h    = detail.get("of_map", {})
+
+                    if "JobID" in df_hist.columns:
+                        df_hist["JobID"] = df_hist["JobID"].fillna(0).astype(int)
+                        df_hist["Pièce"] = df_hist["JobID"].apply(
+                            lambda x: f"P{x} — {pm_h[x]}" if pm_h and x in pm_h
+                            else f"Pièce {x}")
+
                     col_info, col_actions = st.columns([4, 1])
 
                     with col_info:
-                        if ops_list:
-                            df_hist = pd.DataFrame(ops_list)
-                            if "JobID" in df_hist.columns:
-                                df_hist["Pièce"] = df_hist["JobID"].apply(piece_label)
-                            nb_pieces  = df_hist["JobID"].nunique() if "JobID" in df_hist.columns else "—"
-                            nb_mchs_h  = df_hist["MachineID"].nunique() if "MachineID" in df_hist.columns else "—"
-                            makespan_h = int(df_hist["EndTime"].max()) if "EndTime" in df_hist.columns else "—"
+                        nb_pieces_h = df_hist["JobID"].nunique() if "JobID" in df_hist.columns else "—"
+                        nb_mchs_h   = df_hist["MachineID"].nunique() if "MachineID" in df_hist.columns else "—"
+                        m1, m2, m3  = st.columns(3)
+                        m1.metric("PIÈCES",   nb_pieces_h)
+                        m2.metric("MACHINES", nb_mchs_h)
+                        m3.metric("MAKESPAN", f"{makespan_h} min")
 
-                            m1, m2, m3 = st.columns(3)
-                            m1.metric("PIÈCES",   nb_pieces)
-                            m2.metric("MACHINES", nb_mchs_h)
-                            m3.metric("MAKESPAN", f"{makespan_h} min")
-
-                            cols_show = [c for c in
-                                ["OperationID", "Pièce", "MachineLabel", "StartTime", "EndTime", "Duration"]
-                                if c in df_hist.columns]
-                            st.dataframe(df_hist[cols_show], use_container_width=True, hide_index=True)
+                        cols_show = [c for c in
+                            ["OperationID", "Pièce", "MachineLabel",
+                             "StartTime", "EndTime", "Duration"]
+                            if c in df_hist.columns]
+                        st.dataframe(df_hist[cols_show],
+                                     use_container_width=True, hide_index=True)
 
                     with col_actions:
                         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
                         if st.button(f"🔄 Recharger", key=f"reload_{jour_str}"):
-                            df_reload = pd.DataFrame(ops_list)
-                            if "JobID" in df_reload.columns:
-                                df_reload["JobID"]    = df_reload["JobID"].fillna(0).astype(int)
-                                df_reload["JobLabel"] = df_reload["JobID"].apply(piece_label)
-                            st.session_state["data"] = df_reload
-                            save_operations(df_reload, SID)
-                            jobs_list = jour_data.get('jobs', [])
-                            if jobs_list:
-                                df_jobs_r = pd.DataFrame(jobs_list)
-                                st.session_state["df_jobs"] = df_jobs_r
-                                save_jobs(df_jobs_r, SID)
+                            if "JobID" in df_hist.columns:
+                                df_hist["JobLabel"] = df_hist["JobID"].apply(
+                                    lambda x: f"Pièce {x}")
+                            st.session_state["data"]      = df_hist
+                            st.session_state["of_map"]    = of_h
+                            st.session_state["piece_map"] = pm_h
+                            save_operations(df_hist, SID)
+                            if not df_j_h.empty:
+                                st.session_state["df_jobs"] = df_j_h
+                                save_jobs(df_j_h, SID)
                             st.success(f"✔ Planning du {jour_str} rechargé")
                             st.rerun()
 
-                        if ops_list:
-                            df_exp      = pd.DataFrame(ops_list)
-                            df_jobs_exp = pd.DataFrame(jour_data.get('jobs', []))
-                            if "JobID" in df_exp.columns:
-                                df_exp["JobLabel"] = df_exp["JobID"].apply(piece_label)
-                            try:
-                                import plotly.io as pio
-                                fig_h      = build_gantt(df_exp, df_jobs_exp if not df_jobs_exp.empty else None)
-                                gantt_html = pio.to_html(fig_h, full_html=True, include_plotlyjs="cdn")
-                                st.download_button(
-                                    f"⬇ Gantt {jour_str}", gantt_html.encode("utf-8"),
-                                    f"gantt_{jour_str}.html", "text/html",
-                                    key=f"dl_{jour_str}"
-                                )
-                            except Exception:
-                                pass
+                        try:
+                            import plotly.io as pio
+                            fig_h = build_gantt(
+                                df_hist,
+                                df_j_h if not df_j_h.empty else None,
+                                of_map=of_h, piece_map=pm_h
+                            )
+                            gantt_html = pio.to_html(fig_h, full_html=True, include_plotlyjs="cdn")
+                            st.download_button(
+                                f"⬇ Gantt", gantt_html.encode("utf-8"),
+                                f"gantt_{jour_str}.html", "text/html",
+                                key=f"dl_{jour_str}"
+                            )
+                        except Exception:
+                            pass
 
     except Exception as e:
         st.error(f"❌ Erreur chargement historique : {e}")
-        st.info("Vérifiez que la table 'planning_jours' existe dans Supabase et que les policies RLS sont configurées.")
+        st.info("Vérifiez que la table 'planning_jours' existe dans Supabase.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — DOWNLOAD
@@ -1022,9 +1052,11 @@ elif menu == "⬇️ Download":
     if "data_kpi" not in st.session_state:
         st.info("⚠ Calculez d'abord les KPIs (onglet Profit & Marge)")
     else:
-        df_kpi  = st.session_state["data_kpi"]
-        df_ops  = st.session_state.get("data")
-        df_jobs = st.session_state.get("df_jobs")
+        df_kpi    = st.session_state["data_kpi"]
+        df_ops    = st.session_state.get("data")
+        df_jobs   = st.session_state.get("df_jobs")
+        of_map    = st.session_state.get("of_map", {})
+        piece_map = st.session_state.get("piece_map", {})
 
         c1, c2, c3 = st.columns(3, gap="large")
 
@@ -1063,13 +1095,12 @@ elif menu == "⬇️ Download":
         with c3:
             if df_ops is not None:
                 import plotly.io as pio
-                df_ops_export = df_ops.copy()
-                if "JobID" not in df_ops_export.columns and df_jobs is not None:
+                df_ops_exp = df_ops.copy()
+                if "JobID" not in df_ops_exp.columns and df_jobs is not None:
                     job_map = df_jobs.set_index("OperationID")["JobID"].to_dict()
-                    df_ops_export["JobID"] = df_ops_export["OperationID"].map(job_map).fillna(0).astype(int)
-                if "JobID" in df_ops_export.columns:
-                    df_ops_export["JobLabel"] = df_ops_export["JobID"].apply(piece_label)
-                fig        = build_gantt(df_ops_export, df_jobs)
+                    df_ops_exp["JobID"] = df_ops_exp["OperationID"].map(
+                        job_map).fillna(0).astype(int)
+                fig        = build_gantt(df_ops_exp, df_jobs, of_map=of_map, piece_map=piece_map)
                 gantt_html = pio.to_html(fig, full_html=True, include_plotlyjs="cdn")
                 st.markdown("""<div class='dl-card'>
                     <span class='dl-icon'>📅</span>
