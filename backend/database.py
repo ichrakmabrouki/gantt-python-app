@@ -205,3 +205,63 @@ def clear_all(session_id: str) -> None:
             client.table(table).delete().eq("session_id", f"{session_id}_maps").execute()
         except Exception:
             pass
+
+def get_user(username: str) -> dict | None:
+    """Récupère un utilisateur depuis Supabase."""
+    try:
+        client = get_client()
+        res = client.table("users") \
+                    .select("username, password, role") \
+                    .eq("username", username) \
+                    .execute()
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception:
+        return None
+
+def create_user(username: str, password: str, role: str = "user"):
+    """Crée un nouvel utilisateur dans Supabase."""
+    try:
+        existing = get_user(username)
+        if existing:
+            return False, "Cet identifiant existe déjà"
+        client = get_client()
+        client.table("users").insert({
+            "username": username,
+            "password": password,
+            "role":     role
+        }).execute()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
+        # ── Utilisateurs ───────────────────────────────────────────────────────────────
+def get_user(username: str) -> dict | None:
+    try:
+        client = get_client()
+        res = client.table("users")\
+            .select("username, password, role")\
+            .eq("username", username.strip().lower())\
+            .limit(1).execute()
+        if not res.data:
+            return None
+        return res.data[0]
+    except Exception:
+        return None
+
+def create_user(username: str, password: str, role: str = "user") -> tuple[bool, str]:
+    try:
+        u = username.strip().lower()
+        # Vérifie si l'utilisateur existe déjà
+        existing = get_user(u)
+        if existing:
+            return False, f"L'identifiant '{u}' est déjà utilisé"
+        client = get_client()
+        client.table("users").insert({
+            "username": u,
+            "password": password,
+            "role":     role
+        }).execute()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
