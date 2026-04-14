@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import io
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import extra_streamlit_components as stx
+
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
 from backend.data_processor import load_file, validate, parse_and_clean, to_csv_bytes
@@ -18,7 +19,14 @@ from backend.database       import (
     save_of_piece_maps, load_of_piece_maps,
     save_planning_jour, load_planning_jours, load_planning_jour_detail,
     clear_all,
-    get_user, create_user,
+    create_session_token,
+    create_user,
+    get_user,
+    hash_password,
+    needs_password_rehash,
+    update_user_password_hash,
+    verify_password,
+    verify_session_token,
 )
 
 init_db()
@@ -29,13 +37,6 @@ st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙�
 # ⚠️ DEBUG — VIDER LE COOKIE (À SUPPRIMER APRÈS TEST)
 # ══════════════════════════════════════════════════════════════════════════════
 cookie_manager = stx.CookieManager()
-
-with st.sidebar:
-    if st.button("🧹 Vider cookie (debug)", key="debug_clear_cookie"):
-        cookie_manager.delete("gantt_user")
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
 # ══════════════════════════════════════════════════════════════════════════════
 # FIN DEBUG
 # ══════════════════════════════════════════════════════════════════════════════
@@ -49,56 +50,107 @@ if "user_role" not in st.session_state:
     st.session_state["user_role"] = None
 
 # ── Vérifie le cookie existant ─────────────────────────────────────────────
-sid_cookie = cookie_manager.get("gantt_user")
-if sid_cookie and not st.session_state["authenticated"]:
-    user = get_user(sid_cookie)
+session_cookie = cookie_manager.get("gantt_session")
+legacy_cookie = cookie_manager.get("gantt_user")
+
+if session_cookie and not st.session_state["authenticated"]:
+    username = verify_session_token(session_cookie)
+    if username:
+        user = get_user(username)
+        if user:
+            st.session_state["authenticated"] = True
+            st.session_state["SID"] = username
+            st.session_state["user_role"] = user.get("role", "user")
+        else:
+            cookie_manager.delete("gantt_session")
+    else:
+        cookie_manager.delete("gantt_session")
+
+if legacy_cookie and not st.session_state["authenticated"]:
+    user = get_user(legacy_cookie)
     if user:
         st.session_state["authenticated"] = True
-        st.session_state["SID"]           = sid_cookie
-        st.session_state["user_role"]     = user.get("role", "user")
-    else:
-        # Cookie orphelin (ancienne session) — on le supprime
-        cookie_manager.delete("gantt_user")
+        st.session_state["SID"] = legacy_cookie.strip().lower()
+        st.session_state["user_role"] = user.get("role", "user")
+        cookie_manager.set(
+            "gantt_session",
+            create_session_token(st.session_state["SID"]),
+            expires_at=datetime.now() + timedelta(days=7)
+        )
+    cookie_manager.delete("gantt_user")
 
 # ── Page de connexion ──────────────────────────────────────────────────────
+# ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
+
     st.markdown("### 🔐 Connexion")
 
     tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
 
     with tab_login:
-        username_input = st.text_input("Identifiant", key="username")
-        password_input = st.text_input("Mot de passe", type="password", key="password")
-        if st.button("Se connecter", key="login_btn"):
+        with st.form("login_form"):
+            username_input = st.text_input("Identifiant")
+            password_input = st.text_input("Mot de passe", type="password")
+            submit_login = st.form_submit_button("Se connecter")
+
+        if submit_login:
             u = username_input.strip().lower()
             p = password_input.strip()
-            user = get_user(u)
-            if user and user["password"] == p:
-                cookie_manager.set("gantt_user", u)
-                st.session_state["authenticated"] = True
-                st.session_state["SID"]           = u
-                st.session_state["user_role"]     = user.get("role", "user")
-                st.rerun()
-            else:
-                st.error("❌ Identifiant ou mot de passe incorrect")
 
-    with tab_register:
-        new_user  = st.text_input("Nouvel identifiant",        key="new_username")
-        new_pass  = st.text_input("Mot de passe",  type="password", key="new_password")
-        new_pass2 = st.text_input("Confirmer le mot de passe", type="password", key="new_password2")
-        if st.button("Créer le compte", key="register_btn"):
-            u = new_user.strip().lower()
-            p = new_pass.strip()
             if not u or not p:
                 st.error("❌ Identifiant et mot de passe obligatoires")
-            elif p != new_pass2.strip():
+            else:
+                user = get_user(u)
+
+                if user and verify_password(p, user.get("password")):
+                    st.session_state["authenticated"] = True
+                    st.session_state["SID"] = u
+                    st.session_state["user_role"] = user.get("role", "user")
+
+                    if needs_password_rehash(user.get("password")):
+                        update_user_password_hash(u, hash_password(p))
+
+                    cookie_manager.set(
+                        "gantt_session",
+                        create_session_token(u),
+                        expires_at=datetime.now() + timedelta(days=7)
+                    )
+                    cookie_manager.delete("gantt_user")
+
+                    st.success("✅ Connexion réussie")
+                    st.rerun()
+                else:
+                    st.error("❌ Identifiant ou mot de passe incorrect")
+
+    with tab_register:
+        with st.form("register_form"):
+            new_user  = st.text_input("Nouvel identifiant")
+            new_pass  = st.text_input("Mot de passe", type="password")
+            new_pass2 = st.text_input("Confirmer le mot de passe", type="password")
+            submit_register = st.form_submit_button("Créer le compte")
+
+        if submit_register:
+            u = new_user.strip().lower()
+            p = new_pass.strip()
+            p2 = new_pass2.strip()
+
+            if not u or not p or not p2:
+                st.error("❌ Identifiant et mot de passe obligatoires")
+
+            elif p != p2:
                 st.error("❌ Les mots de passe ne correspondent pas")
-            elif len(p) < 6:
-                st.error("❌ Mot de passe trop court (minimum 6 caractères)")
+
+            elif len(p) < 8:
+                st.error("❌ Mot de passe trop court (min 8 caractères)")
+
+            elif not any(ch.isalpha() for ch in p) or not any(ch.isdigit() for ch in p):
+                st.error("❌ Le mot de passe doit contenir au moins une lettre et un chiffre")
+
             else:
                 ok, msg = create_user(u, p)
+
                 if ok:
-                    st.success(f"✔ Compte '{u}' créé — connectez-vous dans l'onglet SE CONNECTER")
+                    st.success(f"✔ Compte '{u}' créé — connecte-toi maintenant")
                 else:
                     st.error(f"❌ {msg}")
 
@@ -106,6 +158,15 @@ if not st.session_state["authenticated"]:
 
 # ── SID récupéré après authentification ───────────────────────────────────
 SID = st.session_state.get("SID")
+
+if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
+    with st.sidebar:
+        if st.button("🧹 Vider ma session (debug admin)", key="debug_clear_cookie"):
+            cookie_manager.delete("gantt_session")
+            cookie_manager.delete("gantt_user")
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL
@@ -312,10 +373,12 @@ with col_s1:
         st.rerun()
 with col_s2:
     if st.button("🚪 QUITTER", key="logout_btn"):
+        cookie_manager.delete("gantt_session")
         cookie_manager.delete("gantt_user")
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
+
 
 # ── Page labels ────────────────────────────────────────────────────────────────
 PAGE_LABELS = {
