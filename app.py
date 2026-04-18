@@ -372,12 +372,16 @@ with col_s1:
             st.session_state.pop(key, None)
         st.rerun()
 with col_s2:
-    if st.button("🚪 QUITTER", key="logout_btn"):
-        cookie_manager.delete("gantt_session")
+    
+    if st.sidebar.button("🚪 Se déconnecter"):
+    try:
         cookie_manager.delete("gantt_user")
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+    except Exception:
+        pass
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.markdown("<meta http-equiv='refresh' content='0'>", unsafe_allow_html=True)
+    st.rerun()    
 
 
 # ── Page labels ────────────────────────────────────────────────────────────────
