@@ -1,0 +1,11 @@
+﻿fichier,pieces,machines,techniciens,operations,setup_cte,phases_min,phases_max
+dataset_01_08pieces_cte10.xlsx,8,6,3,18,10,2,3
+dataset_02_12pieces_cte12.xlsx,12,7,4,37,12,2,4
+dataset_03_20pieces_cte15.xlsx,20,8,4,57,15,2,4
+dataset_04_25pieces_cte15.xlsx,25,9,5,90,15,3,4
+dataset_05_35pieces_cte18.xlsx,35,10,5,141,18,3,5
+dataset_06_45pieces_cte20.xlsx,45,10,5,186,20,3,5
+dataset_07_60pieces_cte22.xlsx,60,12,6,255,22,3,5
+dataset_08_75pieces_cte25.xlsx,75,12,6,305,25,3,5
+dataset_09_90pieces_cte28.xlsx,90,14,7,359,28,3,5
+dataset_10_100pieces_cte30.xlsx,100,15,8,395,30,3,5
