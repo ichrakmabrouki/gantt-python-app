@@ -1,9 +1,16 @@
 # backend/solver/model.py
 
-from ortools.sat.python import cp_model
 import pandas as pd
+from ortools.sat.python import cp_model
 
-def solve_flexible_jobshop(data: dict) -> pd.DataFrame:
+
+def solve_flexible_jobshop(
+    data: dict,
+    max_time_seconds: float = 60.0,
+    num_search_workers: int = 8,
+    log_search_progress: bool = False,
+    relative_gap_limit: float = 0.05,
+) -> pd.DataFrame:
     model = cp_model.CpModel()
 
     params   = data['params']
@@ -12,12 +19,16 @@ def solve_flexible_jobshop(data: dict) -> pd.DataFrame:
     modes    = data['modes']
     pt       = data['pt']
     grp_mchs = data['grp_mchs']
+    machine_ready_times = {
+        int(machine_id): int(ready_time)
+        for machine_id, ready_time in data.get("machine_ready_times", {}).items()
+    }
 
     nbOps  = params['nbOps']
     M_big  = 10000
 
     # ── Horizon ───────────────────────────────────────────────────────────────
-    horizon = sum(pt.values()) + cte * nbOps * 2
+    horizon = sum(pt.values()) + cte * nbOps * 2 + max(machine_ready_times.values(), default=0)
 
     # ── Index utiles ──────────────────────────────────────────────────────────
     all_ops   = list(set(o for (o, m) in modes))
@@ -106,6 +117,12 @@ def solve_flexible_jobshop(data: dict) -> pd.DataFrame:
     # ── C6 : début >= cte (si op assignée) ───────────────────────────────────
     for (o, m) in modes:
         model.Add(s[o, m] >= cte).OnlyEnforceIf(x[o, m])
+
+    # ── C6bis : continuité selon disponibilité machine ───────────────────────
+    for (o, m) in modes:
+        ready_time = machine_ready_times.get(m, 0)
+        if ready_time > 0:
+            model.Add(s[o, m] >= ready_time + cte).OnlyEnforceIf(x[o, m])
 
     # ── C7 : non-chevauchement + setup sur même machine ──────────────────────
     for m in all_mchs:
@@ -231,9 +248,10 @@ def solve_flexible_jobshop(data: dict) -> pd.DataFrame:
 
     # ── Résolution ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 600.0
-    solver.parameters.num_search_workers  = 4
-    solver.parameters.log_search_progress = True
+    solver.parameters.max_time_in_seconds = max_time_seconds
+    solver.parameters.num_search_workers = max(1, int(num_search_workers))
+    solver.parameters.log_search_progress = log_search_progress
+    solver.parameters.relative_gap_limit = max(0.0, float(relative_gap_limit))
 
     status = solver.Solve(model)
 
@@ -261,6 +279,6 @@ def solve_flexible_jobshop(data: dict) -> pd.DataFrame:
             })
 
     df = pd.DataFrame(rows).sort_values(['JobID', 'StartTime']).reset_index(drop=True)
-    print(f"✅ Makespan : {solver.ObjectiveValue()} min")
-    print(f"✅ Status   : {solver.StatusName(status)}")
+    print(f"Makespan : {solver.ObjectiveValue()} min")
+    print(f"Status   : {solver.StatusName(status)}")
     return df
