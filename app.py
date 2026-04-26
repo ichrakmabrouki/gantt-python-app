@@ -8,7 +8,7 @@ import extra_streamlit_components as stx
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
 from backend.data_processor import load_file, validate, parse_and_clean, to_csv_bytes
-from backend.gantt_builder  import build_gantt
+from backend.gantt_builder  import WORKDAY_MINUTES, build_gantt, minutes_to_time
 from backend.kpi_calculator import compute_kpis, summary_by_machine, summary_by_job
 from backend.database       import (
     init_db,
@@ -83,7 +83,7 @@ if legacy_cookie and not st.session_state["authenticated"]:
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
 
-    st.markdown("### 🔐 Connexion")
+    st.markdown("### Connexion")
 
     tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
 
@@ -161,7 +161,7 @@ SID = st.session_state.get("SID")
 
 if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
     with st.sidebar:
-        if st.button("🧹 Vider ma session (debug admin)", key="debug_clear_cookie"):
+        if st.button("Effacer ma session admin", key="debug_clear_cookie"):
             cookie_manager.delete("gantt_session")
             cookie_manager.delete("gantt_user")
             for key in list(st.session_state.keys()):
@@ -180,11 +180,6 @@ html, body,
 [data-testid="stHeader"], [data-testid="stMain"],
 .main, .block-container {
     background-color: #0d1117 !important; color: #c9d1d9 !important; color-scheme: dark !important;
-}
-@media (prefers-color-scheme: light) {
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #0d1117 !important; color: #c9d1d9 !important;
-    }
 }
 [data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 2px solid #ff6b00 !important; }
 [data-testid="stSidebar"] * { font-family: 'Rajdhani', sans-serif !important; color: #8b949e !important; }
@@ -242,16 +237,143 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 .stButton > button:hover { background: #ff6b00 !important; color: #0d1117 !important; }
 .stDownloadButton > button { background: transparent !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Rajdhani', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; border-radius: 2px !important; width: 100% !important; transition: all 0.15s ease !important; }
 .stDownloadButton > button:hover { border-color: #ff6b00 !important; color: #ff6b00 !important; }
-.stNumberInput > div > div > input, .stTextInput > div > div > input { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; font-size: 13px !important; border-radius: 2px !important; }
-.stNumberInput > div > div > input:focus { border-color: #ff6b00 !important; box-shadow: 0 0 0 1px #ff6b0044 !important; }
-[data-testid="stSelectbox"] > div > div { background: #161b22 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important; }
-[data-testid="stFileUploader"] { background: #161b22 !important; border: 1px dashed #30363d !important; border-radius: 4px !important; }
+.stNumberInput > div > div > input,
+.stTextInput > div > div > input,
+[data-testid="stDateInputField"],
+[data-baseweb="input"] input,
+[data-baseweb="base-input"] input,
+textarea,
+input {
+    background-color: #0d1117 !important;
+    border: 1px solid #30363d !important;
+    color: #f3f4f6 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 13px !important;
+    border-radius: 2px !important;
+    caret-color: #f3f4f6 !important;
+}
+.stNumberInput > div > div > input:focus,
+.stTextInput > div > div > input:focus,
+[data-testid="stDateInputField"]:focus,
+[data-baseweb="input"] input:focus,
+[data-baseweb="base-input"] input:focus,
+textarea:focus,
+input:focus {
+    border-color: #ff6b00 !important; box-shadow: 0 0 0 1px #ff6b0044 !important;
+}
+[data-testid="stSelectbox"] > div > div,
+[data-baseweb="select"] > div,
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="select"] *,
+.stMultiSelect div[data-baseweb="select"] {
+    background: #161b22 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important;
+}
+[data-testid="stSelectbox"] label { color: #c9d1d9 !important; }
+[data-testid="stPills"] button {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    color: #c9d1d9 !important;
+    border-radius: 999px !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 12px !important;
+    letter-spacing: 1px !important;
+    min-height: 34px !important;
+}
+[data-testid="stPills"] button[aria-pressed="true"] {
+    background: #ff6b001a !important;
+    border-color: #ff6b00 !important;
+    color: #ff6b00 !important;
+}
+[data-testid="stPills"] button:hover {
+    border-color: #ff6b00 !important;
+    color: #ff6b00 !important;
+}
+[data-baseweb="select"] {
+    min-height: 46px !important;
+}
+[data-baseweb="select"] > div {
+    min-height: 46px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    padding-left: 10px !important;
+    padding-right: 36px !important;
+}
+[data-baseweb="select"] span,
+[data-baseweb="select"] div {
+    color: #f3f4f6 !important;
+    line-height: 1.35 !important;
+}
+[data-baseweb="select"] input {
+    color: #f3f4f6 !important;
+}
+[data-baseweb="menu"] li,
+[role="option"] {
+    background: #161b22 !important;
+    color: #f3f4f6 !important;
+    min-height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+[role="option"][aria-selected="true"] {
+    background: #222b36 !important;
+}
+[data-baseweb="tag"] { background: #0d1117 !important; color: #f3f4f6 !important; border: 1px solid #30363d !important; }
+[data-baseweb="select"] svg,
+[data-testid="stDateInputField"] svg,
+[data-baseweb="input"] svg { fill: #f3f4f6 !important; color: #f3f4f6 !important; }
+[data-testid="stFileUploader"] {
+    background: #161b22 !important;
+    border: 1px dashed #30363d !important;
+    border-radius: 4px !important;
+    color: #f3f4f6 !important;
+}
 [data-testid="stFileUploader"]:hover { border-color: #ff6b00 !important; }
+[data-testid="stFileUploader"] * { color: #f3f4f6 !important; }
+[data-testid="stFileUploaderDropzone"] {
+    background: #0d1117 !important;
+    border: 1px dashed #30363d !important;
+}
+[data-testid="stFileUploaderDropzone"] section {
+    background: #0d1117 !important;
+    color: #f3f4f6 !important;
+}
+[data-testid="stFileUploaderDropzone"] button {
+    background: #161b22 !important;
+    color: #f3f4f6 !important;
+    border: 1px solid #30363d !important;
+}
+[data-testid="stFileUploaderDropzoneInstructions"] span,
+[data-testid="stFileUploaderDropzoneInstructions"] small,
+[data-testid="stFileUploaderFileName"] {
+    color: #f3f4f6 !important;
+}
+[data-testid="stFileUploader"] svg,
+[data-testid="stFileUploaderDropzone"] svg { fill: #f3f4f6 !important; color: #f3f4f6 !important; }
 .stTabs [data-baseweb="tab-list"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 2px !important; padding: 4px !important; gap: 2px !important; }
 .stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 2px !important; color: #8b949e !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 600 !important; font-size: 12px !important; letter-spacing: 2px !important; text-transform: uppercase !important; padding: 7px 16px !important; border: 1px solid transparent !important; transition: all 0.15s !important; }
 .stTabs [aria-selected="true"] { background: #ff6b0012 !important; color: #ff6b00 !important; border-color: #ff6b00 !important; }
 .stTabs [data-baseweb="tab-panel"] { background: #161b22 !important; border: 1px solid #30363d !important; border-top: none !important; border-radius: 0 0 4px 4px !important; padding: 20px !important; }
 [data-testid="stDataFrame"] { border: 1px solid #30363d !important; border-radius: 4px !important; overflow: hidden !important; background: #161b22 !important; }
+[data-testid="stForm"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 4px !important; padding: 18px !important; }
+[data-testid="stExpander"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 4px !important; }
+[data-testid="stExpander"] * { color: #c9d1d9 !important; }
+[data-testid="stExpander"] details summary {
+    min-height: 70px !important;
+    display: flex !important;
+    align-items: center !important;
+    line-height: 1.4 !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    padding-right: 24px !important;
+}
+[data-testid="stExpander"] details summary p,
+[data-testid="stExpander"] details summary span {
+    line-height: 1.4 !important;
+    white-space: normal !important;
+    font-size: 12px !important;
+}
 [data-testid="stAlert"] { background: #161b22 !important; border-radius: 2px !important; border-left-width: 3px !important; }
 [data-testid="stAlert"] p { color: #c9d1d9 !important; font-size: 12px !important; }
 .status-badge { background: #0f2a1a; border: 1px solid #238636; border-radius: 2px; padding: 5px 10px; font-family: 'Inter', sans-serif !important; font-size: 11px !important; color: #3fb950 !important; margin: 4px 0; display: block; letter-spacing: 0.5px; }
@@ -260,6 +382,14 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 .dl-icon { font-size: 26px; }
 .dl-label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 700 !important; color: #8b949e !important; letter-spacing: 2px; text-transform: uppercase; }
 label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 600 !important; color: #8b949e !important; letter-spacing: 1px !important; text-transform: uppercase !important; }
+[data-testid="stWidgetLabel"] p,
+[data-testid="stMarkdownContainer"] label,
+[data-testid="stFileUploaderDropzoneInstructions"] div,
+[data-testid="stTextInput"] label,
+[data-testid="stNumberInput"] label,
+[data-testid="stDateInput"] label {
+    color: #c9d1d9 !important;
+}
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
@@ -300,11 +430,11 @@ st.sidebar.markdown("""
 </p>""", unsafe_allow_html=True)
 
 menu = st.sidebar.radio("", [
-    "📂 Upload Data",
-    "📅 Gantt Diagram",
-    "📈 KPI's",
-    "📋 Historique",
-    "⬇️ Download"
+    "🗂 Données",
+    "🗓 Planning",
+    "📈 KPI",
+    "🕘 Historique",
+    "⤓ Export"
 ])
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
@@ -340,13 +470,13 @@ if "data" in st.session_state:
        margin-bottom:6px'>📅 PLANIFICATION MULTI-JOURS</p>""", unsafe_allow_html=True)
     jour_cloture = st.sidebar.date_input("Date du planning", value=date.today(),
                                           key="jour_cloture_date")
-    if st.sidebar.button("💾 CLÔTURER CE JOUR", key="cloture_btn"):
+    if st.sidebar.button("ARCHIVER LE JOUR", key="cloture_btn"):
         try:
             df_ops_cl    = st.session_state["data"]
             df_jobs_cl   = st.session_state.get("df_jobs", pd.DataFrame())
             of_map_cl    = st.session_state.get("of_map", {})
             piece_map_cl = st.session_state.get("piece_map", {})
-            makespan_cl  = int(df_ops_cl["EndTime"].max())
+            makespan_cl  = planning_makespan(df_ops_cl)
             label_cl     = f"Planning {jour_cloture.strftime('%d/%m/%Y')}"
             ok, msg = save_planning_jour(
                 session_id=SID, jour=str(jour_cloture), label=label_cl,
@@ -365,32 +495,32 @@ st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_al
 # ── Boutons réinitialiser et déconnecter ───────────────────────────────────────
 col_s1, col_s2 = st.sidebar.columns(2)
 with col_s1:
-    if st.button("🗑 RESET", key="reset_btn"):
+    if st.button("RÉINITIALISER", key="reset_btn"):
         clear_all(SID)
         for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
                     "kpi_params", "of_map", "piece_map"]:
             st.session_state.pop(key, None)
         st.rerun()
 with col_s2:
-    
-    if st.sidebar.button("🚪 Se déconnecter"):
-    try:
-        cookie_manager.delete("gantt_user")
-    except Exception:
-        pass
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.markdown("<meta http-equiv='refresh' content='0'>", unsafe_allow_html=True)
-    st.rerun()    
+    if st.sidebar.button("DÉCONNEXION"):
+        try:
+            cookie_manager.delete("gantt_session")
+            cookie_manager.delete("gantt_user")
+        except Exception:
+            pass
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.markdown("<meta http-equiv='refresh' content='0'>", unsafe_allow_html=True)
+        st.rerun()
 
 
 # ── Page labels ────────────────────────────────────────────────────────────────
 PAGE_LABELS = {
-    "📂 Upload Data":   "Upload Data",
-    "📅 Gantt Diagram": "Gantt Diagram",
-    "📈 KPI's":         "KPI's",
-    "📋 Historique":    "Historique",
-    "⬇️ Download":      "Download",
+    "🗂 Données":    "Données",
+    "🗓 Planning":   "Planning",
+    "📈 KPI":        "KPI",
+    "🕘 Historique": "Historique",
+    "⤓ Export":     "Export",
 }
 
 # ── Header ─────────────────────────────────────────────────────────────────────
@@ -431,13 +561,19 @@ def piece_label(job_id: int) -> str:
         return f"P{job_id} — {piece_map[job_id]}"
     return f"Pièce {job_id}"
 
+
+def planning_makespan(df: pd.DataFrame) -> int:
+    if df is None or df.empty:
+        return 0
+    return int(df["EndTime"].max() - df["StartTime"].min())
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — UPLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-if menu == "📂 Upload Data":
+if menu == "🗂 Données":
     st.markdown("""
     <div class='page-header-bar'>
-        <p class='page-title'>⬆ UPLOAD DATA</p>
+        <p class='page-title'>DONNÉES DE PLANIFICATION</p>
         <p class='page-subtitle'>Uploadez votre fichier Excel template et lancez l'optimisation.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -450,7 +586,43 @@ if menu == "📂 Upload Data":
         )
     with col_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        run_solver = st.button("▶ LANCER", key="run_solver_btn")
+        run_solver = st.button("CALCULER LE PLANNING", key="run_solver_btn")
+
+    solve_profiles = {
+        "Rapide": {"max_time_seconds": 20.0, "relative_gap_limit": 0.15},
+        "Standard": {"max_time_seconds": 60.0, "relative_gap_limit": 0.08},
+        "Approfondi": {"max_time_seconds": 180.0, "relative_gap_limit": 0.03},
+    }
+    solve_mode = st.selectbox(
+        "MODE DE RÉSOLUTION",
+        list(solve_profiles.keys()),
+        index=0,
+        help="Rapide renvoie une bonne solution plus vite. Approfondi cherche plus longtemps."
+    )
+
+    use_previous_planning = False
+    selected_base_day = None
+    archived_days = load_planning_jours(SID) if SID else []
+    if archived_days:
+        archived_days_sorted = sorted(archived_days, key=lambda x: x["jour"], reverse=True)
+        archived_options = {
+            f"{item.get('label', item['jour'])} | {item['jour']}": str(item["jour"])
+            for item in archived_days_sorted
+        }
+        use_previous_planning = st.checkbox(
+            "Continuer depuis un planning archive",
+            key="continue_last_planning",
+            help="Les nouvelles operations seront planifiees en tenant compte de la disponibilite des machines du planning historique choisi."
+        )
+        if use_previous_planning:
+            selected_label = st.selectbox(
+                "PLANNING HISTORIQUE DE BASE",
+                list(archived_options.keys()),
+                index=0,
+                key="planning_base_day",
+            )
+            selected_base_day = archived_options[selected_label]
+            st.caption(f"Base de continuation : {selected_base_day}")
 
     if excel_file is not None:
         try:
@@ -470,6 +642,7 @@ if menu == "📂 Upload Data":
                 c5p.metric("SETUP (min)", data_preview['cte'])
                 st.success("✔ Fichier valide — prêt pour l'optimisation")
                 st.session_state["excel_data_cache"] = excel_bytes
+                st.session_state["cte"] = int(data_preview.get("cte", 0))
         except Exception as e:
             st.error(f"❌ Impossible de lire le fichier : {e}")
     else:
@@ -508,9 +681,38 @@ if menu == "📂 Upload Data":
             st.error(f"❌ Données invalides : {msg_val}")
             st.stop()
 
-        with st.spinner("⚙ Résolution en cours — cela peut prendre jusqu'à 10 minutes..."):
+        st.session_state["cte"] = int(solver_data.get("cte", 0))
+
+        if use_previous_planning and selected_base_day:
+            detail_prev = load_planning_jour_detail(SID, selected_base_day)
+            if detail_prev is not None and not detail_prev["df_ops"].empty:
+                machine_ready_times = (
+                    detail_prev["df_ops"]
+                    .groupby("MachineID")["EndTime"]
+                    .max()
+                    .astype(int)
+                    .to_dict()
+                )
+                solver_data["machine_ready_times"] = machine_ready_times
+                st.info(
+                    f"Continuation activee depuis {selected_base_day} "
+                    f"sur {len(machine_ready_times)} machine(s)."
+                )
+
+        profile = solve_profiles[solve_mode]
+
+        with st.spinner(
+            f"⚙ Résolution en cours — mode {solve_mode.lower()} "
+            f"({int(profile['max_time_seconds'])} s max)..."
+        ):
             try:
-                df_result  = solve_flexible_jobshop(solver_data)
+                df_result  = solve_flexible_jobshop(
+                    solver_data,
+                    max_time_seconds=profile["max_time_seconds"],
+                    num_search_workers=8,
+                    log_search_progress=False,
+                    relative_gap_limit=profile["relative_gap_limit"],
+                )
                 gammes_map = {g[0]: g[1] for g in solver_data["gammes"]}
                 df_result["JobID"] = df_result["OperationID"].map(
                     gammes_map).fillna(0).astype(int)
@@ -531,7 +733,7 @@ if menu == "📂 Upload Data":
                 save_jobs(df_jobs_auto, SID)
                 st.session_state.pop("excel_data_cache", None)
 
-                makespan  = int(df_result["EndTime"].max())
+                makespan  = planning_makespan(df_result)
                 nb_pieces = df_result["JobID"].nunique()
 
                 st.success(
@@ -554,10 +756,10 @@ if menu == "📂 Upload Data":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — GANTT
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "📅 Gantt Diagram":
+elif menu == "🗓 Planning":
     st.markdown("""
     <div class='page-header-bar'>
-        <p class='page-title'>◈ GANTT DIAGRAM</p>
+        <p class='page-title'>DIAGRAMME DE GANTT</p>
         <p class='page-subtitle'>Visualisation de l'ordonnancement des opérations sur les machines.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -575,27 +777,65 @@ elif menu == "📅 Gantt Diagram":
                                   on="OperationID", how="left")
             df_ops["JobID"] = df_ops.get("JobID", 0)
         df_ops["JobID"] = df_ops["JobID"].fillna(0).astype(int)
+        start_time_day = int(st.session_state.get("start_time_day", 360))
+        cte_value = int(st.session_state.get("cte", 0))
+        max_end_time = int(df_ops["EndTime"].max())
+        day_count = max(1, (max_end_time + WORKDAY_MINUTES - 1) // WORKDAY_MINUTES)
 
-        col_sel, _ = st.columns([2, 5])
-        with col_sel:
-            machines = ["Toutes"] + sorted(
+        col_machine, col_day, _ = st.columns([3, 3, 2])
+        with col_machine:
+            machines = sorted(
                 df_ops["MachineLabel"].unique().tolist(),
                 key=lambda x: int(x.split()[-1])
             )
-            sel = st.selectbox("FILTRER PAR MACHINE", machines)
+            selected_machines = st.pills(
+                "FILTRER PAR MACHINE",
+                machines,
+                default=machines,
+                selection_mode="multi",
+            )
+        with col_day:
+            day_options = [f"Jour {idx}" for idx in range(1, day_count + 1)]
+            selected_days = st.pills(
+                "FILTRER PAR JOUR",
+                day_options,
+                default=day_options,
+                selection_mode="multi",
+            )
 
-        df_f = df_ops if sel == "Toutes" else df_ops[df_ops["MachineLabel"] == sel]
-        fig  = build_gantt(df_f, df_jobs, of_map=of_map, piece_map=piece_map)
+        df_f = df_ops if not selected_machines else df_ops[df_ops["MachineLabel"].isin(selected_machines)]
+        x_range = None
+        if selected_days:
+            selected_day_indexes = sorted(int(day.split()[-1]) - 1 for day in selected_days)
+            day_ranges = [
+                (day_index * WORKDAY_MINUTES, (day_index + 1) * WORKDAY_MINUTES)
+                for day_index in selected_day_indexes
+            ]
+            day_mask = False
+            for day_start, day_end in day_ranges:
+                current_mask = (df_f["StartTime"] < day_end) & (df_f["EndTime"] > day_start)
+                day_mask = current_mask if isinstance(day_mask, bool) else (day_mask | current_mask)
+            df_f = df_f[day_mask]
+            x_range = (day_ranges[0][0], day_ranges[-1][1])
+        fig  = build_gantt(
+            df_f,
+            df_jobs,
+            of_map=of_map,
+            piece_map=piece_map,
+            start_time_day=start_time_day,
+            cte=cte_value,
+            x_range=x_range,
+        )
         fig.update_layout(**chart_layout())
         st.plotly_chart(fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 3 — KPIs
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "📈 KPI's":
+elif menu == "📈 KPI":
     st.markdown("""
     <div class='page-header-bar'>
-        <p class='page-title'>◈ KPI'S</p>
+        <p class='page-title'>INDICATEURS DE PERFORMANCE</p>
         <p class='page-subtitle'>KPIs d'ordonnancement, coûts et rentabilité par OF et par pièce.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -636,18 +876,14 @@ elif menu == "📈 KPI's":
 
         with tab1:
             due_date = int(df["EndTime"].max())
-            col_p1, col_p2 = st.columns(2)
+            col_p1, _ = st.columns([2, 5])
             with col_p1:
                 start_time_day = st.number_input(
                     "DÉBUT JOURNÉE (MIN DEPUIS 00H00)",
                     min_value=0, value=360, step=10, key="start_time_day")
-            with col_p2:
-                nb_operateurs = st.number_input(
-                    "NOMBRE D'OPÉRATEURS", min_value=1, value=3, step=1,
-                    key="nb_operateurs_input")
-            st.session_state["nb_operateurs_val"] = nb_operateurs
+                st.caption(f"Heure affichee : {minutes_to_time(0, int(start_time_day))}")
 
-            st.info(f"📅 Makespan calculé automatiquement : **{due_date} min**")
+            st.info(f"📅 Makespan du lot courant : **{makespan} min**")
 
             jobs_en_retard = (job_cycle["Fin"] > due_date).sum()
             taux_retard    = round(jobs_en_retard / len(job_cycle) * 100, 1)
@@ -753,13 +989,13 @@ elif menu == "📈 KPI's":
         with tab3:
             st.markdown("<p class='section-title'>Prix de vente par pièce</p>", unsafe_allow_html=True)
             job_ids   = sorted(df["JobID"].unique())
-            cols_prix = st.columns(min(len(job_ids), 5))
+            cols_prix = st.columns(min(len(job_ids), 7))
             prix_vente = {}
             for i, jid in enumerate(job_ids):
-                with cols_prix[i % 5]:
+                with cols_prix[i % max(1, min(len(job_ids), 7))]:
                     saved_val = prix_saved.get(jid, prix_saved.get(str(jid), 10.0))
                     prix_vente[jid] = st.number_input(
-                        f"PIÈCE {jid} (€/U)", min_value=0.0,
+                        f"P{jid}", min_value=0.0,
                         value=float(saved_val), step=1.0, key=f"pv_{jid}"
                     )
 
@@ -871,7 +1107,7 @@ elif menu == "📈 KPI's":
                 annotation_text="Seuil 75%",
                 annotation_font_color="#ffffff", annotation_font_size=10)
             fig_util.update_layout(**chart_layout(
-                barmode="stack", height=320,
+                barmode="stack", height=440,
                 legend=dict(orientation="h", y=1.1, font=dict(color="#c9d1d9", size=11)),
                 yaxis=dict(range=[0, 110], title="% Makespan", gridcolor="#21262d", color="#8b949e"),
                 xaxis=dict(gridcolor="#21262d", color="#8b949e")
@@ -894,7 +1130,7 @@ elif menu == "📈 KPI's":
                 fig_pie.add_annotation(
                     text=f"<b>{taux_util_moyen}%</b>", x=0.5, y=0.5,
                     font=dict(size=22, color=center_color, family="Rajdhani"), showarrow=False)
-                fig_pie.update_layout(**chart_layout(height=300, showlegend=False))
+                fig_pie.update_layout(**chart_layout(height=420, showlegend=False))
                 st.plotly_chart(fig_pie, use_container_width=True)
 
             with col_g2:
@@ -915,7 +1151,7 @@ elif menu == "📈 KPI's":
                     annotation_text=f"Moy : {cycle_mean:.0f} min",
                     annotation_font_color="#ffffff", annotation_font_size=10)
                 fig_cycle.update_layout(**chart_layout(
-                    height=300,
+                    height=420,
                     yaxis=dict(title="Minutes", gridcolor="#21262d", color="#8b949e"),
                     xaxis=dict(gridcolor="#21262d", color="#8b949e")
                 ))
@@ -944,7 +1180,7 @@ elif menu == "📈 KPI's":
                         ))
                         fig_profit.add_hline(y=0, line_color="#30363d", line_width=1.2)
                         fig_profit.update_layout(**chart_layout(
-                            height=300,
+                            height=440,
                             title=dict(text="Profit (€) par pièce",
                                        font=dict(color="#ff6b00", size=12, family="Rajdhani"), x=0.01),
                             yaxis=dict(title="Profit (€)", gridcolor="#21262d", color="#8b949e"),
@@ -972,7 +1208,7 @@ elif menu == "📈 KPI's":
                             annotation_font_color="#00bcd4", annotation_font_size=10)
                         fig_marge.add_hline(y=0, line_color="#30363d", line_width=1)
                         fig_marge.update_layout(**chart_layout(
-                            height=300,
+                            height=440,
                             title=dict(text="Marge (%) par pièce",
                                        font=dict(color="#ff6b00", size=12, family="Rajdhani"), x=0.01),
                             yaxis=dict(title="Marge (%)", gridcolor="#21262d", color="#8b949e"),
@@ -1001,7 +1237,7 @@ elif menu == "📈 KPI's":
                                 marker_color=col_color, marker_line=dict(width=0),
                             ))
                     fig_cout.update_layout(**chart_layout(
-                        barmode="stack", height=320,
+                        barmode="stack", height=440,
                         legend=dict(orientation="h", y=1.1, font=dict(color="#c9d1d9", size=11)),
                         yaxis=dict(title="Coût (€)", gridcolor="#21262d", color="#8b949e"),
                         xaxis=dict(gridcolor="#21262d", color="#8b949e")
@@ -1013,10 +1249,10 @@ elif menu == "📈 KPI's":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 4 — HISTORIQUE
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "📋 Historique":
+elif menu == "🕘 Historique":
     st.markdown("""
     <div class='page-header-bar'>
-        <p class='page-title'>📋 HISTORIQUE DES PLANIFICATIONS</p>
+        <p class='page-title'>HISTORIQUE DES PLANIFICATIONS</p>
         <p class='page-subtitle'>Consultez et rechargez les plannings des jours précédents.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -1024,9 +1260,10 @@ elif menu == "📋 Historique":
         jours = load_planning_jours(SID)
 
         if not jours:
-            st.info("⚠ Aucun planning sauvegardé. Utilisez '💾 CLÔTURER CE JOUR' dans la sidebar.")
+            st.info("⚠ Aucun planning sauvegardé. Utilisez 'ARCHIVER LE JOUR' dans la barre latérale.")
         else:
-            st.markdown(f"<p class='section-title'>{len(jours)} JOUR(S) SAUVEGARDÉ(S)</p>",
+            count_label = "PLANNING SAUVEGARDÉ" if len(jours) == 1 else "PLANNINGS SAUVEGARDÉS"
+            st.markdown(f"<p class='section-title'>{len(jours)} {count_label}</p>",
                         unsafe_allow_html=True)
 
             for idx, jour_data in enumerate(
@@ -1035,7 +1272,8 @@ elif menu == "📋 Historique":
                 label      = jour_data.get('label', jour_str)
                 makespan_h = jour_data.get('makespan', '—')
 
-                with st.expander(f"📅 {label} — Makespan : {makespan_h} min",
+                expander_title = f"{label} • {makespan_h} min"
+                with st.expander(expander_title,
                                  expanded=(idx == 0)):
                     detail = load_planning_jour_detail(SID, jour_str)
                     if detail is None:
@@ -1072,7 +1310,7 @@ elif menu == "📋 Historique":
 
                     with col_actions:
                         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                        if st.button(f"🔄 Recharger", key=f"reload_{jour_str}"):
+                        if st.button(f"RECHARGER", key=f"reload_{jour_str}"):
                             if "JobID" in df_hist.columns:
                                 df_hist["JobLabel"] = df_hist["JobID"].apply(
                                     lambda x: f"Pièce {x}")
@@ -1091,11 +1329,14 @@ elif menu == "📋 Historique":
                             fig_h = build_gantt(
                                 df_hist,
                                 df_j_h if not df_j_h.empty else None,
-                                of_map=of_h, piece_map=pm_h
+                                of_map=of_h,
+                                piece_map=pm_h,
+                                start_time_day=int(st.session_state.get("start_time_day", 360)),
+                                cte=int(st.session_state.get("cte", 0)),
                             )
                             gantt_html = pio.to_html(fig_h, full_html=True, include_plotlyjs="cdn")
                             st.download_button(
-                                f"⬇ Gantt", gantt_html.encode("utf-8"),
+                                f"TÉLÉCHARGER GANTT", gantt_html.encode("utf-8"),
                                 f"gantt_{jour_str}.html", "text/html",
                                 key=f"dl_{jour_str}"
                             )
@@ -1109,10 +1350,10 @@ elif menu == "📋 Historique":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — DOWNLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "⬇️ Download":
+elif menu == "⤓ Export":
     st.markdown("""
     <div class='page-header-bar'>
-        <p class='page-title'>⬇ DOWNLOAD</p>
+        <p class='page-title'>EXPORT DES RÉSULTATS</p>
         <p class='page-subtitle'>Exportez vos résultats en CSV, Excel ou Gantt interactif HTML.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -1132,7 +1373,7 @@ elif menu == "⬇️ Download":
                 <span class='dl-icon'>📄</span>
                 <span class='dl-label'>Export CSV — KPIs</span>
             </div>""", unsafe_allow_html=True)
-            st.download_button("⬇ TÉLÉCHARGER CSV", to_csv_bytes(df_kpi),
+            st.download_button("TÉLÉCHARGER CSV", to_csv_bytes(df_kpi),
                                "kpi_data.csv", "text/csv", use_container_width=True)
 
         with c2:
@@ -1155,7 +1396,7 @@ elif menu == "⬇️ Download":
                 <span class='dl-icon'>📊</span>
                 <span class='dl-label'>Rapport Excel complet</span>
             </div>""", unsafe_allow_html=True)
-            st.download_button("⬇ TÉLÉCHARGER EXCEL", buf.getvalue(), "rapport.xlsx",
+            st.download_button("TÉLÉCHARGER EXCEL", buf.getvalue(), "rapport.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True)
 
@@ -1167,13 +1408,20 @@ elif menu == "⬇️ Download":
                     job_map = df_jobs.set_index("OperationID")["JobID"].to_dict()
                     df_ops_exp["JobID"] = df_ops_exp["OperationID"].map(
                         job_map).fillna(0).astype(int)
-                fig        = build_gantt(df_ops_exp, df_jobs, of_map=of_map, piece_map=piece_map)
+                fig        = build_gantt(
+                    df_ops_exp,
+                    df_jobs,
+                    of_map=of_map,
+                    piece_map=piece_map,
+                    start_time_day=int(st.session_state.get("start_time_day", 360)),
+                    cte=int(st.session_state.get("cte", 0)),
+                )
                 gantt_html = pio.to_html(fig, full_html=True, include_plotlyjs="cdn")
                 st.markdown("""<div class='dl-card'>
                     <span class='dl-icon'>📅</span>
                     <span class='dl-label'>Gantt HTML interactif</span>
                 </div>""", unsafe_allow_html=True)
-                st.download_button("⬇ TÉLÉCHARGER GANTT", gantt_html.encode("utf-8"),
+                st.download_button("TÉLÉCHARGER GANTT", gantt_html.encode("utf-8"),
                                    "gantt.html", "text/html", use_container_width=True)
             else:
                 st.info("⚠ Chargez d'abord vos données pour exporter le Gantt")
