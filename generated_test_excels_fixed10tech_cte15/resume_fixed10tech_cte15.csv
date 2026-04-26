@@ -1,0 +1,11 @@
+﻿fichier,pieces,machines,techniciens,operations,setup_cte,phases_min,phases_max
+case_01_08pieces.xlsx,8,6,10,19,15,2,3
+case_02_12pieces.xlsx,12,7,10,36,15,2,4
+case_03_16pieces.xlsx,16,8,10,49,15,2,4
+case_04_20pieces.xlsx,20,8,10,60,15,2,4
+case_05_25pieces.xlsx,25,9,10,83,15,3,4
+case_06_30pieces.xlsx,30,10,10,105,15,3,4
+case_07_40pieces.xlsx,40,11,10,153,15,3,5
+case_08_50pieces.xlsx,50,12,10,210,15,3,5
+case_09_75pieces.xlsx,75,14,10,305,15,3,5
+case_10_100pieces.xlsx,100,15,10,396,15,3,5
