@@ -429,13 +429,21 @@ st.sidebar.markdown("""
    ⚙ NAVIGATION
 </p>""", unsafe_allow_html=True)
 
-menu = st.sidebar.radio("", [
+MENU_OPTIONS = [
     "🗂 Données",
     "🗓 Planning",
     "📈 KPI",
     "🕘 Historique",
-    "⤓ Export"
-])
+    "⤓ Export",
+]
+if st.session_state.get("main_menu_v2") not in MENU_OPTIONS:
+    st.session_state.pop("main_menu_v2", None)
+menu = st.sidebar.radio(
+    "Navigation principale",
+    MENU_OPTIONS,
+    key="main_menu_v2",
+    label_visibility="collapsed",
+)
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
@@ -788,19 +796,35 @@ elif menu == "🗓 Planning":
                 df_ops["MachineLabel"].unique().tolist(),
                 key=lambda x: int(x.split()[-1])
             )
+            if st.session_state.get("planning_machines_v2"):
+                st.session_state["planning_machines_v2"] = [
+                    value for value in st.session_state["planning_machines_v2"]
+                    if value in machines
+                ]
             selected_machines = st.pills(
                 "FILTRER PAR MACHINE",
                 machines,
                 default=machines,
                 selection_mode="multi",
+                key="planning_machines_v2",
             )
         with col_day:
-            day_options = [f"Jour {idx}" for idx in range(1, day_count + 1)]
+            all_day_options = [f"Jour {idx}" for idx in range(1, day_count + 1)]
+            day_options = all_day_options[-2:] if len(all_day_options) >= 2 else all_day_options
+            default_days = day_options
+            if st.session_state.get("planning_days_v2"):
+                st.session_state["planning_days_v2"] = [
+                    value for value in st.session_state["planning_days_v2"]
+                    if value in day_options
+                ]
+            if not st.session_state.get("planning_days_v2"):
+                st.session_state["planning_days_v2"] = default_days
             selected_days = st.pills(
                 "FILTRER PAR JOUR",
                 day_options,
-                default=day_options,
+                default=default_days,
                 selection_mode="multi",
+                key="planning_days_v2",
             )
 
         df_f = df_ops if not selected_machines else df_ops[df_ops["MachineLabel"].isin(selected_machines)]
@@ -879,7 +903,7 @@ elif menu == "📈 KPI":
             col_p1, _ = st.columns([2, 5])
             with col_p1:
                 start_time_day = st.number_input(
-                    "DÉBUT JOURNÉE (MIN DEPUIS 00H00)",
+                    "DÉBUT JOURNÉE (MIN DEPUIS 6H00)",
                     min_value=0, value=360, step=10, key="start_time_day")
                 st.caption(f"Heure affichee : {minutes_to_time(0, int(start_time_day))}")
 
