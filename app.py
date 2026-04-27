@@ -49,6 +49,22 @@ if "SID" not in st.session_state:
 if "user_role" not in st.session_state:
     st.session_state["user_role"] = None
 
+
+def clear_auth_session() -> None:
+    expired_at = datetime.now() - timedelta(days=1)
+    for cookie_name in ("gantt_session", "gantt_user"):
+        try:
+            cookie_manager.delete(cookie_name)
+        except Exception:
+            pass
+        try:
+            cookie_manager.set(cookie_name, "", expires_at=expired_at)
+        except Exception:
+            pass
+
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+
 # ── Vérifie le cookie existant ─────────────────────────────────────────────
 session_cookie = cookie_manager.get("gantt_session")
 legacy_cookie = cookie_manager.get("gantt_user")
@@ -103,6 +119,7 @@ if not st.session_state["authenticated"]:
                 user = get_user(u)
 
                 if user and verify_password(p, user.get("password")):
+                    clear_auth_session()
                     st.session_state["authenticated"] = True
                     st.session_state["SID"] = u
                     st.session_state["user_role"] = user.get("role", "user")
@@ -162,10 +179,7 @@ SID = st.session_state.get("SID")
 if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
     with st.sidebar:
         if st.button("Effacer ma session admin", key="debug_clear_cookie"):
-            cookie_manager.delete("gantt_session")
-            cookie_manager.delete("gantt_user")
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            clear_auth_session()
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -501,7 +515,7 @@ if "data" in st.session_state:
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
 # ── Boutons réinitialiser et déconnecter ───────────────────────────────────────
-col_s1, col_s2 = st.sidebar.columns(2)
+col_s1, col_s2, col_s3 = st.sidebar.columns(3)
 with col_s1:
     if st.button("RÉINITIALISER", key="reset_btn"):
         clear_all(SID)
@@ -510,15 +524,12 @@ with col_s1:
             st.session_state.pop(key, None)
         st.rerun()
 with col_s2:
-    if st.sidebar.button("DÉCONNEXION"):
-        try:
-            cookie_manager.delete("gantt_session")
-            cookie_manager.delete("gantt_user")
-        except Exception:
-            pass
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.markdown("<meta http-equiv='refresh' content='0'>", unsafe_allow_html=True)
+    if st.button("COMPTE", key="switch_account_btn"):
+        clear_auth_session()
+        st.rerun()
+with col_s3:
+    if st.button("DÉCONNEXION", key="logout_btn"):
+        clear_auth_session()
         st.rerun()
 
 
