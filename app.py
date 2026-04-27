@@ -48,6 +48,8 @@ if "SID" not in st.session_state:
     st.session_state["SID"] = None
 if "user_role" not in st.session_state:
     st.session_state["user_role"] = None
+if "force_login" not in st.session_state:
+    st.session_state["force_login"] = False
 
 
 def clear_auth_session() -> None:
@@ -62,14 +64,25 @@ def clear_auth_session() -> None:
         except Exception:
             pass
 
+    keep_force_login = st.session_state.get("force_login", False)
     for key in list(st.session_state.keys()):
         del st.session_state[key]
+    st.session_state["force_login"] = keep_force_login
 
 # ── Vérifie le cookie existant ─────────────────────────────────────────────
 session_cookie = cookie_manager.get("gantt_session")
 legacy_cookie = cookie_manager.get("gantt_user")
 
-if session_cookie and not st.session_state["authenticated"]:
+if st.session_state.get("force_login"):
+    try:
+        cookie_manager.delete("gantt_session")
+        cookie_manager.delete("gantt_user")
+    except Exception:
+        pass
+    session_cookie = None
+    legacy_cookie = None
+
+if session_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
     username = verify_session_token(session_cookie)
     if username:
         user = get_user(username)
@@ -82,7 +95,7 @@ if session_cookie and not st.session_state["authenticated"]:
     else:
         cookie_manager.delete("gantt_session")
 
-if legacy_cookie and not st.session_state["authenticated"]:
+if legacy_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
     user = get_user(legacy_cookie)
     if user:
         st.session_state["authenticated"] = True
@@ -123,6 +136,7 @@ if not st.session_state["authenticated"]:
                     st.session_state["authenticated"] = True
                     st.session_state["SID"] = u
                     st.session_state["user_role"] = user.get("role", "user")
+                    st.session_state["force_login"] = False
 
                     if needs_password_rehash(user.get("password")):
                         update_user_password_hash(u, hash_password(p))
@@ -179,6 +193,7 @@ SID = st.session_state.get("SID")
 if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
     with st.sidebar:
         if st.button("Effacer ma session admin", key="debug_clear_cookie"):
+            st.session_state["force_login"] = True
             clear_auth_session()
             st.rerun()
 
@@ -525,10 +540,12 @@ with col_s1:
         st.rerun()
 with col_s2:
     if st.button("COMPTE", key="switch_account_btn"):
+        st.session_state["force_login"] = True
         clear_auth_session()
         st.rerun()
 with col_s3:
     if st.button("DÉCONNEXION", key="logout_btn"):
+        st.session_state["force_login"] = True
         clear_auth_session()
         st.rerun()
 
