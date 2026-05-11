@@ -114,7 +114,13 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
 
-    st.markdown("### Connexion")
+    st.markdown("""
+    <div class="login-hero">
+        <p class="login-kicker">Atelier mecanique</p>
+        <h1>Gantt Dashboard</h1>
+        <p>Planification, suivi de charge, KPI et historiques de production dans un espace securise.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
 
@@ -458,6 +464,359 @@ label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !importa
 ::-webkit-scrollbar-track { background: #0d1117; }
 ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: #ff6b00; }
+
+:root {
+    --bg: #0b1014;
+    --panel: #111820;
+    --panel-2: #151f28;
+    --line: #27323d;
+    --line-soft: #1c2731;
+    --text: #e5edf3;
+    --muted: #9aa8b4;
+    --accent: #d87722;
+    --accent-soft: rgba(216, 119, 34, 0.14);
+    --ok: #2fa872;
+    --info: #4f8fcf;
+    --warn: #d6a536;
+    --danger: #d85b5b;
+}
+
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] > div:first-child,
+[data-testid="stHeader"], [data-testid="stMain"],
+.main, .block-container {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+}
+
+.block-container {
+    max-width: 1480px !important;
+    padding-top: 1.2rem !important;
+    padding-bottom: 2.5rem !important;
+}
+
+*, p, div, span, li, .stMarkdown p, [data-testid="stMarkdownContainer"] p {
+    color: var(--text) !important;
+    font-size: 13px !important;
+    line-height: 1.55 !important;
+    letter-spacing: 0 !important;
+}
+
+h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    color: var(--text) !important;
+    letter-spacing: 0.04em !important;
+}
+
+[data-testid="stSidebar"] {
+    background: #0f161d !important;
+    border-right: 1px solid var(--line) !important;
+}
+
+[data-testid="stSidebar"] .stRadio label {
+    border-radius: 6px !important;
+    padding: 9px 10px !important;
+    color: var(--muted) !important;
+    letter-spacing: 0.06em !important;
+}
+
+[data-testid="stSidebar"] .stRadio label:hover {
+    background: rgba(255,255,255,0.035) !important;
+    color: var(--text) !important;
+}
+
+.masthead-eyebrow {
+    color: var(--muted) !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.18em !important;
+    text-shadow: none !important;
+    margin-bottom: 8px !important;
+}
+
+.masthead-accent {
+    display: none !important;
+}
+
+.header-banner {
+    background: linear-gradient(135deg, #121b24 0%, #17232d 100%) !important;
+    border: 1px solid var(--line) !important;
+    border-left: 4px solid var(--accent) !important;
+    border-radius: 8px !important;
+    padding: 18px 22px !important;
+    margin-bottom: 18px !important;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.18) !important;
+}
+
+.header-title {
+    color: var(--text) !important;
+    font-size: 1.55rem !important;
+    letter-spacing: 0.12em !important;
+}
+
+.header-page-active {
+    border-left: 0 !important;
+    padding-left: 0 !important;
+    color: var(--accent) !important;
+    font-size: 0.78rem !important;
+    letter-spacing: 0.14em !important;
+}
+
+.header-date {
+    color: var(--muted) !important;
+}
+
+.header-date span {
+    color: var(--accent) !important;
+}
+
+.divline {
+    display: none !important;
+}
+
+.page-header-bar {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-left: 4px solid var(--accent) !important;
+    border-radius: 8px !important;
+    padding: 16px 18px !important;
+    margin: 8px 0 18px !important;
+}
+
+.page-title {
+    color: var(--text) !important;
+    font-size: 1rem !important;
+    letter-spacing: 0.11em !important;
+}
+
+.page-subtitle {
+    color: var(--muted) !important;
+    font-size: 0.78rem !important;
+}
+
+.section-title {
+    color: var(--accent) !important;
+    letter-spacing: 0.08em !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    padding-bottom: 7px !important;
+}
+
+[data-testid="stMetric"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-top: 0 !important;
+    border-radius: 8px !important;
+    padding: 14px 16px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: var(--text) !important;
+    font-size: 1.42rem !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: var(--muted) !important;
+    letter-spacing: 0.08em !important;
+}
+
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFileUploaderDropzone"] button {
+    border-radius: 6px !important;
+    min-height: 40px !important;
+    letter-spacing: 0.08em !important;
+}
+
+.stButton > button {
+    background: var(--accent) !important;
+    border: 1px solid var(--accent) !important;
+    color: #101820 !important;
+}
+
+.stButton > button:hover {
+    background: #ee8a32 !important;
+    border-color: #ee8a32 !important;
+    color: #101820 !important;
+    transform: translateY(-1px);
+}
+
+.stDownloadButton > button {
+    background: var(--panel-2) !important;
+    border-color: var(--line) !important;
+    color: var(--text) !important;
+}
+
+.stDownloadButton > button:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
+.stNumberInput > div > div > input,
+.stTextInput > div > div > input,
+[data-testid="stDateInputField"],
+[data-baseweb="input"] input,
+[data-baseweb="base-input"] input,
+textarea,
+input {
+    background: #0e151c !important;
+    border-color: var(--line) !important;
+    border-radius: 6px !important;
+    min-height: 40px !important;
+}
+
+[data-baseweb="select"] > div,
+[data-testid="stFileUploader"],
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stForm"],
+[data-testid="stExpander"],
+[data-testid="stDataFrame"],
+.stTabs [data-baseweb="tab-list"],
+.stTabs [data-baseweb="tab-panel"],
+.dl-card {
+    background: var(--panel) !important;
+    border-color: var(--line) !important;
+    border-radius: 8px !important;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    padding: 5px !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 6px !important;
+    letter-spacing: 0.07em !important;
+    color: var(--muted) !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background: var(--accent-soft) !important;
+    border-color: rgba(216,119,34,0.35) !important;
+    color: var(--accent) !important;
+}
+
+[data-testid="stAlert"] {
+    background: var(--panel) !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--line) !important;
+}
+
+.status-badge {
+    background: rgba(47,168,114,0.12) !important;
+    border-color: rgba(47,168,114,0.35) !important;
+    border-radius: 999px !important;
+    color: #6fd39e !important;
+    padding: 5px 11px !important;
+    display: inline-block !important;
+}
+
+.status-badge-teal {
+    background: rgba(79,143,207,0.13) !important;
+    border-color: rgba(79,143,207,0.35) !important;
+    color: #8fc1f2 !important;
+}
+
+.dl-card {
+    height: 132px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+}
+
+.dl-label {
+    color: var(--text) !important;
+    letter-spacing: 0.08em !important;
+}
+
+.login-hero {
+    max-width: 760px;
+    margin: 8vh auto 28px;
+    padding: 28px 30px;
+    background: linear-gradient(135deg, #121b24 0%, #17232d 100%);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+}
+
+.login-hero h1 {
+    margin: 0 0 8px !important;
+    color: var(--text) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 2rem !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+}
+
+.login-hero p {
+    max-width: 620px;
+    margin: 0 !important;
+    color: var(--muted) !important;
+}
+
+.login-kicker {
+    color: var(--accent) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.16em !important;
+    margin-bottom: 8px !important;
+    text-transform: uppercase !important;
+}
+
+label,
+[data-testid="stWidgetLabel"] p {
+    color: var(--muted) !important;
+    letter-spacing: 0.07em !important;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0b1014; }
+::-webkit-scrollbar-thumb { background: #34424f; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+@media (max-width: 800px) {
+    .block-container {
+        padding-left: 0.9rem !important;
+        padding-right: 0.9rem !important;
+        padding-top: 0.8rem !important;
+    }
+    .header-banner {
+        align-items: flex-start !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 16px !important;
+    }
+    .header-title {
+        font-size: 1.18rem !important;
+        letter-spacing: 0.08em !important;
+    }
+    .header-date {
+        text-align: left !important;
+    }
+    .page-header-bar {
+        padding: 14px !important;
+    }
+    .login-hero {
+        margin-top: 2vh !important;
+        padding: 20px !important;
+    }
+    .login-hero h1 {
+        font-size: 1.35rem !important;
+        letter-spacing: 0.07em !important;
+    }
+    .stButton > button,
+    .stDownloadButton > button {
+        width: 100% !important;
+    }
+    [data-testid="stMetric"] {
+        margin-bottom: 8px !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        min-width: max-content !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
