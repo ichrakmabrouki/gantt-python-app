@@ -817,6 +817,47 @@ label,
         min-width: max-content !important;
     }
 }
+
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapsedControl"],
+button[title*="sidebar" i],
+button[aria-label*="sidebar" i] {
+    background: var(--accent) !important;
+    border: 1px solid #ee8a32 !important;
+    border-radius: 999px !important;
+    color: #101820 !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    box-shadow: 0 10px 28px rgba(216,119,34,0.35) !important;
+}
+
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebarCollapsedControl"] svg,
+button[title*="sidebar" i] svg,
+button[aria-label*="sidebar" i] svg {
+    color: #101820 !important;
+    fill: #101820 !important;
+    stroke: #101820 !important;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    min-height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"] {
+    background: var(--accent-soft) !important;
+    border-color: rgba(216,119,34,0.35) !important;
+    color: var(--accent) !important;
+    border-radius: 999px !important;
+}
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"] span {
+    color: var(--accent) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -844,6 +885,13 @@ if SID and "of_map" not in st.session_state:
     st.session_state["of_map"]    = of_map_db
     st.session_state["piece_map"] = piece_map_db
 
+
+def planning_makespan(df: pd.DataFrame) -> int:
+    if df is None or df.empty:
+        return 0
+    return int(df["EndTime"].max() - df["StartTime"].min())
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
 <p style='font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;
@@ -860,7 +908,7 @@ MENU_OPTIONS = [
     "⤓ Export",
 ]
 if st.session_state.get("user_role") == "admin":
-    MENU_OPTIONS.append("Analytics")
+    MENU_OPTIONS.append("📊 Analytics")
 if st.session_state.get("main_menu_v2") not in MENU_OPTIONS:
     st.session_state.pop("main_menu_v2", None)
 menu = st.sidebar.radio(
@@ -951,7 +999,7 @@ PAGE_LABELS = {
     "📈 KPI":        "KPI",
     "🕘 Historique": "Historique",
     "⤓ Export":     "Export",
-    "Analytics":     "Analytics",
+    "📊 Analytics":  "Analytics",
 }
 
 # ── Header ─────────────────────────────────────────────────────────────────────
@@ -992,11 +1040,6 @@ def piece_label(job_id: int) -> str:
         return f"P{job_id} — {piece_map[job_id]}"
     return f"Pièce {job_id}"
 
-
-def planning_makespan(df: pd.DataFrame) -> int:
-    if df is None or df.empty:
-        return 0
-    return int(df["EndTime"].max() - df["StartTime"].min())
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — UPLOAD
@@ -1213,44 +1256,45 @@ elif menu == "🗓 Planning":
         max_end_time = int(df_ops["EndTime"].max())
         day_count = max(1, (max_end_time + WORKDAY_MINUTES - 1) // WORKDAY_MINUTES)
 
-        col_machine, col_day, _ = st.columns([3, 3, 2])
+        col_machine, col_day, col_job = st.columns([3, 2, 3])
         with col_machine:
             machines = sorted(
                 df_ops["MachineLabel"].unique().tolist(),
                 key=lambda x: int(x.split()[-1])
             )
-            if st.session_state.get("planning_machines_v2"):
-                st.session_state["planning_machines_v2"] = [
-                    value for value in st.session_state["planning_machines_v2"]
-                    if value in machines
-                ]
-            selected_machines = st.pills(
+            selected_machines = st.multiselect(
                 "FILTRER PAR MACHINE",
                 machines,
                 default=machines,
-                selection_mode="multi",
-                key="planning_machines_v2",
+                key="planning_machine_filter",
+                help="Selectionnez une ou plusieurs machines a afficher."
             )
         with col_day:
             all_day_options = [f"Jour {idx}" for idx in range(1, day_count + 1)]
             day_options = all_day_options[-2:] if len(all_day_options) >= 2 else all_day_options
             default_days = day_options
-            if st.session_state.get("planning_days_v2"):
-                st.session_state["planning_days_v2"] = [
-                    value for value in st.session_state["planning_days_v2"]
-                    if value in day_options
-                ]
-            if not st.session_state.get("planning_days_v2"):
-                st.session_state["planning_days_v2"] = default_days
-            selected_days = st.pills(
+            selected_days = st.multiselect(
                 "FILTRER PAR JOUR",
                 day_options,
                 default=default_days,
-                selection_mode="multi",
-                key="planning_days_v2",
+                key="planning_day_filter",
+                help="Selectionnez les jours visibles dans le diagramme."
             )
+        with col_job:
+            jobs = sorted(df_ops["JobID"].dropna().astype(int).unique().tolist())
+            job_options = {piece_label(job_id): job_id for job_id in jobs}
+            selected_job_labels = st.multiselect(
+                "FILTRER PAR PIECE / JOB",
+                list(job_options.keys()),
+                default=list(job_options.keys()),
+                key="planning_job_filter",
+                help="Selectionnez les pieces/jobs a afficher."
+            )
+            selected_jobs = [job_options[label] for label in selected_job_labels]
 
         df_f = df_ops if not selected_machines else df_ops[df_ops["MachineLabel"].isin(selected_machines)]
+        if selected_jobs:
+            df_f = df_f[df_f["JobID"].isin(selected_jobs)]
         x_range = None
         if selected_days:
             selected_day_indexes = sorted(int(day.split()[-1]) - 1 for day in selected_days)
@@ -1797,7 +1841,7 @@ elif menu == "🕘 Historique":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — DOWNLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "Analytics":
+elif menu == "📊 Analytics":
     if st.session_state.get("user_role") != "admin":
         st.error("Acces reserve aux administrateurs.")
         st.stop()
