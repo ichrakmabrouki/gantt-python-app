@@ -27,6 +27,9 @@ from backend.database       import (
     update_user_password_hash,
     verify_password,
     verify_session_token,
+    log_app_access,
+    load_access_logs,
+    load_access_summary,
 )
 
 init_db()
@@ -109,7 +112,6 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
     cookie_manager.delete("gantt_user")
 
 # ── Page de connexion ──────────────────────────────────────────────────────
-# ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
 
     st.markdown("### Connexion")
@@ -189,6 +191,39 @@ if not st.session_state["authenticated"]:
 
 # ── SID récupéré après authentification ───────────────────────────────────
 SID = st.session_state.get("SID")
+
+
+def _request_context() -> tuple[str | None, str | None]:
+    try:
+        headers = st.context.headers
+    except Exception:
+        headers = {}
+
+    def header(name: str) -> str | None:
+        try:
+            return headers.get(name)
+        except Exception:
+            return None
+
+    user_agent = header("user-agent")
+    host = header("host") or header("x-forwarded-host")
+    proto = header("x-forwarded-proto") or "https"
+    app_url = f"{proto}://{host}" if host else None
+    return app_url, user_agent
+
+
+if SID and not st.session_state.get("access_logged"):
+    app_url, user_agent = _request_context()
+    source = st.query_params.get("src") or st.query_params.get("source") or "direct"
+    log_app_access(
+        username=SID,
+        event="visit",
+        page="app",
+        app_url=app_url,
+        user_agent=user_agent,
+        source=source,
+    )
+    st.session_state["access_logged"] = True
 
 if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
     with st.sidebar:
@@ -465,6 +500,8 @@ MENU_OPTIONS = [
     "🕘 Historique",
     "⤓ Export",
 ]
+if st.session_state.get("user_role") == "admin":
+    MENU_OPTIONS.append("Analytics")
 if st.session_state.get("main_menu_v2") not in MENU_OPTIONS:
     st.session_state.pop("main_menu_v2", None)
 menu = st.sidebar.radio(
@@ -529,25 +566,23 @@ if "data" in st.session_state:
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
-# ── Boutons réinitialiser et déconnecter ───────────────────────────────────────
-col_s1, col_s2, col_s3 = st.sidebar.columns(3)
-with col_s1:
-    if st.button("RÉINITIALISER", key="reset_btn"):
-        clear_all(SID)
-        for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
-                    "kpi_params", "of_map", "piece_map"]:
-            st.session_state.pop(key, None)
-        st.rerun()
-with col_s2:
-    if st.button("COMPTE", key="switch_account_btn"):
-        st.session_state["force_login"] = True
-        clear_auth_session()
-        st.rerun()
-with col_s3:
-    if st.button("DÉCONNEXION", key="logout_btn"):
-        st.session_state["force_login"] = True
-        clear_auth_session()
-        st.rerun()
+# ── Boutons réinitialiser et déconnecter (verticaux) ──────────────────────────
+if st.sidebar.button("RÉINITIALISER", key="reset_btn", use_container_width=True):
+    clear_all(SID)
+    for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
+                "kpi_params", "of_map", "piece_map"]:
+        st.session_state.pop(key, None)
+    st.rerun()
+
+if st.sidebar.button("COMPTE", key="switch_account_btn", use_container_width=True):
+    st.session_state["force_login"] = True
+    clear_auth_session()
+    st.rerun()
+
+if st.sidebar.button("DÉCONNEXION", key="logout_btn", use_container_width=True):
+    st.session_state["force_login"] = True
+    clear_auth_session()
+    st.rerun()
 
 
 # ── Page labels ────────────────────────────────────────────────────────────────
@@ -557,6 +592,7 @@ PAGE_LABELS = {
     "📈 KPI":        "KPI",
     "🕘 Historique": "Historique",
     "⤓ Export":     "Export",
+    "Analytics":     "Analytics",
 }
 
 # ── Header ─────────────────────────────────────────────────────────────────────
@@ -1402,6 +1438,36 @@ elif menu == "🕘 Historique":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — DOWNLOAD
 # ══════════════════════════════════════════════════════════════════════════════
+elif menu == "Analytics":
+    if st.session_state.get("user_role") != "admin":
+        st.error("Acces reserve aux administrateurs.")
+        st.stop()
+
+    st.markdown("""
+    <div class='page-header-bar'>
+        <p class='page-title'>ANALYTICS</p>
+        <p class='page-subtitle'>Suivi des acces a l'application et des utilisateurs connectes.</p>
+    </div>""", unsafe_allow_html=True)
+
+    summary = load_access_summary()
+    c1, c2, c3 = st.columns(3, gap="large")
+    c1.metric("Acces enregistres", summary["total"])
+    c2.metric("Utilisateurs uniques", summary["users"])
+    c3.metric("Dernier acces", summary["last_access"] or "-")
+
+    st.markdown("### Acces par utilisateur")
+    if summary["by_user"].empty:
+        st.info("Aucun acces enregistre pour le moment. Verifiez aussi que la table Supabase 'app_access_logs' existe.")
+    else:
+        st.dataframe(summary["by_user"], use_container_width=True, hide_index=True)
+
+    st.markdown("### Derniers acces")
+    logs = load_access_logs(limit=200)
+    if logs.empty:
+        st.info("Aucun journal disponible.")
+    else:
+        st.dataframe(logs, use_container_width=True, hide_index=True)
+
 elif menu == "⤓ Export":
     st.markdown("""
     <div class='page-header-bar'>
