@@ -306,6 +306,70 @@ def load_planning_jour_detail(session_id: str, jour: str) -> dict | None:
 
 
 # ── Reset ──────────────────────────────────────────────────────────────────────
+def log_app_access(
+    username: str,
+    event: str = "visit",
+    page: str | None = None,
+    app_url: str | None = None,
+    user_agent: str | None = None,
+    source: str | None = None,
+) -> tuple[bool, str]:
+    try:
+        client = get_client()
+        client.table("app_access_logs").insert({
+            "username": _normalize_username(username),
+            "event": event,
+            "page": page,
+            "app_url": app_url,
+            "user_agent": user_agent,
+            "source": source,
+        }).execute()
+        return True, "OK"
+    except Exception as e:
+        return False, str(e)
+
+
+def load_access_logs(limit: int = 200) -> pd.DataFrame:
+    try:
+        client = get_client()
+        res = client.table("app_access_logs")\
+            .select("created_at, username, event, page, source, app_url, user_agent")\
+            .order("created_at", desc=True)\
+            .limit(limit)\
+            .execute()
+        return pd.DataFrame(res.data or [])
+    except Exception:
+        return pd.DataFrame()
+
+
+def load_access_summary() -> dict:
+    logs = load_access_logs(limit=1000)
+    if logs.empty:
+        return {
+            "total": 0,
+            "users": 0,
+            "last_access": None,
+            "by_user": pd.DataFrame(),
+        }
+
+    by_user = (
+        logs.groupby("username", dropna=False)
+        .agg(
+            acces=("username", "size"),
+            dernier_acces=("created_at", "max"),
+        )
+        .reset_index()
+        .sort_values(["acces", "dernier_acces"], ascending=[False, False])
+    )
+
+    return {
+        "total": int(len(logs)),
+        "users": int(logs["username"].nunique()),
+        "last_access": logs["created_at"].max(),
+        "by_user": by_user,
+    }
+
+
 def clear_all(session_id: str) -> None:
     client = get_client()
     for table in ("operations", "jobs", "kpis", "prix", "planning_jours"):
