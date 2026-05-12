@@ -2,8 +2,30 @@ import streamlit as st
 import pandas as pd
 import io
 import uuid
+import base64
+from pathlib import Path
 from datetime import datetime, date, timedelta
 import extra_streamlit_components as stx
+
+
+APP_DIR = Path(__file__).resolve().parent
+ICON_DIR = APP_DIR / "assets" / "icons"
+SIDEBAR_ICON_DIR = ICON_DIR
+
+
+def icon_data_uri(filename: str) -> str:
+    try:
+        raw = (ICON_DIR / filename).read_bytes()
+        return "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
+    except Exception:
+        return ""
+
+
+def icon_img(filename: str, size: int = 18, class_name: str = "inline-icon") -> str:
+    return (
+        f"<img class='{class_name}' src='{icon_data_uri(filename)}' "
+        f"style='width:{size}px;height:{size}px;object-fit:contain;vertical-align:-4px;' alt='' />"
+    )
 
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
@@ -34,10 +56,14 @@ from backend.database       import (
 
 init_db()
 
-st.set_page_config(page_title="Gantt Dashboard", layout="wide", page_icon="⚙️")
+st.set_page_config(
+    page_title="Gantt Dashboard",
+    layout="wide",
+    page_icon=str(ICON_DIR / "icon-streamlit.png"),
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ⚠️ DEBUG — VIDER LE COOKIE (À SUPPRIMER APRÈS TEST)
+# DEBUG — VIDER LE COOKIE (À SUPPRIMER APRÈS TEST)
 # ══════════════════════════════════════════════════════════════════════════════
 cookie_manager = stx.CookieManager()
 # ══════════════════════════════════════════════════════════════════════════════
@@ -135,7 +161,7 @@ if not st.session_state["authenticated"]:
             p = password_input.strip()
 
             if not u or not p:
-                st.error("❌ Identifiant et mot de passe obligatoires")
+                st.error("Identifiant et mot de passe obligatoires")
             else:
                 user = get_user(u)
 
@@ -156,10 +182,10 @@ if not st.session_state["authenticated"]:
                     )
                     cookie_manager.delete("gantt_user")
 
-                    st.success("✅ Connexion réussie")
+                    st.success("Connexion réussie")
                     st.rerun()
                 else:
-                    st.error("❌ Identifiant ou mot de passe incorrect")
+                    st.error("Identifiant ou mot de passe incorrect")
 
     with tab_register:
         with st.form("register_form"):
@@ -174,24 +200,24 @@ if not st.session_state["authenticated"]:
             p2 = new_pass2.strip()
 
             if not u or not p or not p2:
-                st.error("❌ Identifiant et mot de passe obligatoires")
+                st.error("Identifiant et mot de passe obligatoires")
 
             elif p != p2:
-                st.error("❌ Les mots de passe ne correspondent pas")
+                st.error("Les mots de passe ne correspondent pas")
 
             elif len(p) < 8:
-                st.error("❌ Mot de passe trop court (min 8 caractères)")
+                st.error("Mot de passe trop court (min 8 caractères)")
 
             elif not any(ch.isalpha() for ch in p) or not any(ch.isdigit() for ch in p):
-                st.error("❌ Le mot de passe doit contenir au moins une lettre et un chiffre")
+                st.error("Le mot de passe doit contenir au moins une lettre et un chiffre")
 
             else:
                 ok, msg = create_user(u, p)
 
                 if ok:
-                    st.success(f"✔ Compte '{u}' créé — connecte-toi maintenant")
+                    st.success(f"Compte '{u}' créé — connecte-toi maintenant")
                 else:
-                    st.error(f"❌ {msg}")
+                    st.error(msg)
 
     st.stop()
 
@@ -720,6 +746,12 @@ input {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
 }
 
+.dl-icon-img {
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: contain !important;
+}
+
 .dl-label {
     color: var(--text) !important;
     letter-spacing: 0.08em !important;
@@ -823,13 +855,14 @@ label,
 [data-testid="stSidebarCollapsedControl"],
 button[title*="sidebar" i],
 button[aria-label*="sidebar" i] {
-    background: var(--accent) !important;
-    border: 1px solid #ee8a32 !important;
-    border-radius: 999px !important;
-    color: #101820 !important;
-    min-width: 42px !important;
-    min-height: 42px !important;
-    box-shadow: 0 10px 28px rgba(216,119,34,0.35) !important;
+    background: transparent !important;
+    border: 0 !important;
+    color: var(--accent) !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 4px !important;
+    box-shadow: none !important;
+    font-weight: 800 !important;
 }
 
 [data-testid="collapsedControl"] svg,
@@ -837,26 +870,113 @@ button[aria-label*="sidebar" i] {
 [data-testid="stSidebarCollapsedControl"] svg,
 button[title*="sidebar" i] svg,
 button[aria-label*="sidebar" i] svg {
-    color: #101820 !important;
-    fill: #101820 !important;
-    stroke: #101820 !important;
+    color: var(--accent) !important;
+    fill: var(--accent) !important;
+    stroke: var(--accent) !important;
+    width: 26px !important;
+    height: 26px !important;
+    stroke-width: 3px !important;
 }
 
 [data-testid="stSidebar"] [role="radiogroup"] label {
-    min-height: 38px !important;
+    min-height: 42px !important;
     display: flex !important;
     align-items: center !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: var(--text) !important;
 }
 
-[data-testid="stMultiSelect"] [data-baseweb="tag"] {
-    background: var(--accent-soft) !important;
+[data-testid="stExpander"] label,
+[data-testid="stExpander"] [data-testid="stCheckbox"] label,
+[data-testid="stExpander"] [data-testid="stCheckbox"] p {
+    color: var(--text) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.15 !important;
+}
+
+[data-testid="stExpander"] .stButton > button {
+    min-height: 28px !important;
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    background: var(--panel-2) !important;
+    color: var(--accent) !important;
     border-color: rgba(216,119,34,0.35) !important;
-    color: var(--accent) !important;
-    border-radius: 999px !important;
 }
 
-[data-testid="stMultiSelect"] [data-baseweb="tag"] span {
+[data-testid="stExpander"] details summary {
+    min-height: 42px !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+}
+
+[data-testid="stExpander"] details summary p {
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}
+
+[data-testid="stExpander"] [data-testid="stCheckbox"] {
+    min-height: 24px !important;
+    margin-bottom: -6px !important;
+}
+
+[data-testid="stCheckbox"] svg {
     color: var(--accent) !important;
+    fill: var(--accent) !important;
+}
+
+.sidebar-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 8px;
+    color: rgba(255,255,255,0.42) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 0.68rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+}
+
+.sidebar-section-title img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+}
+
+[data-testid="stSidebar"] [data-testid="stImage"] img {
+    object-fit: contain !important;
+}
+
+[data-testid="stSidebar"] .stButton > button {
+    justify-content: flex-start !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: var(--text) !important;
+    min-height: 40px !important;
+    padding: 7px 10px !important;
+    width: 100% !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(216,119,34,0.10) !important;
+    border-color: rgba(216,119,34,0.28) !important;
+    color: var(--accent) !important;
+    transform: none !important;
+}
+
+html, body, body *,
+[data-testid="stAppViewContainer"] *,
+[data-testid="stSidebar"] *,
+[data-testid="stMarkdownContainer"] *,
+[data-testid="stWidgetLabel"] *,
+button, input, textarea, label,
+.header-title, .header-page-active, .page-title, .section-title,
+.login-hero h1, .login-kicker, .sidebar-section-title,
+.dl-label {
+    font-family: 'Inter', sans-serif !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -892,31 +1012,85 @@ def planning_makespan(df: pd.DataFrame) -> int:
     return int(df["EndTime"].max() - df["StartTime"].min())
 
 
+def checkbox_dropdown(
+    label: str,
+    options: list[str],
+    key_prefix: str,
+    default_selected: list[str] | None = None,
+    columns: int = 1,
+) -> list[str]:
+    options = list(options)
+    default_selected = options if default_selected is None else list(default_selected)
+    applied_key = f"{key_prefix}_applied"
+    if applied_key not in st.session_state:
+        st.session_state[applied_key] = list(default_selected)
+
+    st.session_state[applied_key] = [
+        option for option in st.session_state[applied_key] if option in options
+    ]
+    selected_count = len(st.session_state[applied_key])
+
+    with st.expander(f"{label} ({selected_count}/{len(options)})", expanded=False):
+        with st.form(f"{key_prefix}_form"):
+            all_selected = selected_count == len(options) and len(options) > 0
+            select_all = st.checkbox("Tout", value=all_selected, key=f"{key_prefix}_all_draft")
+
+            selected = []
+            option_columns = st.columns(columns)
+            for idx, option in enumerate(options):
+                checkbox_key = f"{key_prefix}_{idx}_draft"
+                default_value = option in st.session_state[applied_key]
+                with option_columns[idx % columns]:
+                    if st.checkbox(option, value=default_value, key=checkbox_key):
+                        selected.append(option)
+
+            apply_filter = st.form_submit_button("Appliquer", use_container_width=True)
+            if apply_filter:
+                if select_all and selected_count < len(options):
+                    st.session_state[applied_key] = list(options)
+                elif not select_all and all_selected:
+                    st.session_state[applied_key] = []
+                else:
+                    st.session_state[applied_key] = selected
+                st.rerun()
+
+    return st.session_state[applied_key]
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
 <p style='font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;
    color:rgba(255,255,255,0.25);letter-spacing:3px;text-transform:uppercase;
    border-bottom:1px solid #30363d;padding-bottom:10px;margin-bottom:8px'>
-   ⚙ NAVIGATION
+   """ + icon_img("icon-streamlit.png", 18) + """ NAVIGATION
 </p>""", unsafe_allow_html=True)
 
-MENU_OPTIONS = [
-    "🗂 Données",
-    "🗓 Planning",
-    "📈 KPI",
-    "🕘 Historique",
-    "⤓ Export",
+NAV_ITEMS = [
+    {"key": "data", "label": "Données", "menu": "Données", "icon": "icon-data.png"},
+    {"key": "planning", "label": "Planning", "menu": "Planning", "icon": "icon-planning.png"},
+    {"key": "kpi", "label": "KPI", "menu": "KPI", "icon": "icon-kpi.png"},
+    {"key": "history", "label": "Historique", "menu": "Historique", "icon": "icon-history.png"},
+    {"key": "export", "label": "Export", "menu": "Export", "icon": "icon-export.png"},
 ]
 if st.session_state.get("user_role") == "admin":
-    MENU_OPTIONS.append("📊 Analytics")
-if st.session_state.get("main_menu_v2") not in MENU_OPTIONS:
-    st.session_state.pop("main_menu_v2", None)
-menu = st.sidebar.radio(
-    "Navigation principale",
-    MENU_OPTIONS,
-    key="main_menu_v2",
-    label_visibility="collapsed",
-)
+    NAV_ITEMS.append({"key": "analytics", "label": "Analytics", "menu": "Analytics", "icon": "icon-kpi.png"})
+
+nav_keys = [item["key"] for item in NAV_ITEMS]
+if "main_nav" not in st.session_state or st.session_state["main_nav"] not in nav_keys:
+    requested_nav = st.query_params.get("nav", "data")
+    st.session_state["main_nav"] = requested_nav if requested_nav in nav_keys else "data"
+
+for item in NAV_ITEMS:
+    icon_col, label_col = st.sidebar.columns([0.22, 0.78])
+    with icon_col:
+        st.image(str(SIDEBAR_ICON_DIR / item["icon"]), width=30)
+    with label_col:
+        prefix = "> " if item["key"] == st.session_state["main_nav"] else ""
+        if st.button(f"{prefix}{item['label']}", key=f"nav_{item['key']}", use_container_width=True):
+            st.session_state["main_nav"] = item["key"]
+            st.rerun()
+
+menu = next(item["menu"] for item in NAV_ITEMS if item["key"] == st.session_state["main_nav"])
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
@@ -924,20 +1098,20 @@ st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_al
 st.sidebar.markdown("<div style='margin-top:4px'>", unsafe_allow_html=True)
 st.sidebar.markdown(
     f"<span class='status-badge' style='background:#1a1200;border-color:#ff6b00;"
-    f"color:#ff6b00'>👤 {SID}</span>",
+    f"color:#ff6b00'>{icon_img('icon-user.png', 16)} {SID}</span>",
     unsafe_allow_html=True)
 if "data" in st.session_state:
     st.sidebar.markdown(
-        f"<span class='status-badge'>✔ {len(st.session_state['data'])} OPÉRATIONS</span>",
+        f"<span class='status-badge'>{icon_img('icon-check.png', 16)} {len(st.session_state['data'])} OPÉRATIONS</span>",
         unsafe_allow_html=True)
 if "df_jobs" in st.session_state:
     n = st.session_state["df_jobs"]["JobID"].nunique()
     st.sidebar.markdown(
-        f"<span class='status-badge status-badge-teal'>⬡ {n} PIÈCES MAPPÉES</span>",
+        f"<span class='status-badge status-badge-teal'>{icon_img('icon-hexagon.png', 16)} {n} PIÈCES MAPPÉES</span>",
         unsafe_allow_html=True)
 if "data_kpi" in st.session_state:
     st.sidebar.markdown(
-        "<span class='status-badge'>▶ KPIs CALCULÉS</span>",
+        f"<span class='status-badge'>{icon_img('icon-play.png', 16)} KPIs CALCULÉS</span>",
         unsafe_allow_html=True)
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
@@ -945,10 +1119,12 @@ st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_al
 
 # ── Clôture journée ────────────────────────────────────────────────────────────
 if "data" in st.session_state:
+    planning_icon = icon_data_uri("icon-planning.png")
     st.sidebar.markdown("""
-    <p style='font-family:Rajdhani,sans-serif;font-size:0.6rem;font-weight:700;
-       color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;
-       margin-bottom:6px'>📅 PLANIFICATION MULTI-JOURS</p>""", unsafe_allow_html=True)
+    <div class='sidebar-section-title'>
+        <img src='""" + planning_icon + """' alt='' />
+        <span>Planification multi-jours</span>
+    </div>""", unsafe_allow_html=True)
     jour_cloture = st.sidebar.date_input("Date du planning", value=date.today(),
                                           key="jour_cloture_date")
     if st.sidebar.button("ARCHIVER LE JOUR", key="cloture_btn"):
@@ -965,11 +1141,11 @@ if "data" in st.session_state:
                 of_map=of_map_cl, piece_map=piece_map_cl, makespan=makespan_cl,
             )
             if ok:
-                st.sidebar.success(f"✔ Jour {jour_cloture} sauvegardé")
+                st.sidebar.success(f"Jour {jour_cloture} sauvegardé")
             else:
-                st.sidebar.error(f"❌ {msg}")
+                st.sidebar.error(msg)
         except Exception as ex:
-            st.sidebar.error(f"❌ {ex}")
+            st.sidebar.error(str(ex))
 
 st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
 
@@ -994,23 +1170,23 @@ if st.sidebar.button("DÉCONNEXION", key="logout_btn", use_container_width=True)
 
 # ── Page labels ────────────────────────────────────────────────────────────────
 PAGE_LABELS = {
-    "🗂 Données":    "Données",
-    "🗓 Planning":   "Planning",
-    "📈 KPI":        "KPI",
-    "🕘 Historique": "Historique",
-    "⤓ Export":     "Export",
-    "📊 Analytics":  "Analytics",
+    "Données":    "Données",
+    "Planning":   "Planning",
+    "KPI":        "KPI",
+    "Historique": "Historique",
+    "Export":     "Export",
+    "Analytics":  "Analytics",
 }
 
 # ── Header ─────────────────────────────────────────────────────────────────────
 now = datetime.now()
 st.markdown(f"""
-<p class="masthead-eyebrow">⚙ SYSTÈME DE PILOTAGE INDUSTRIEL</p>
+<p class="masthead-eyebrow">{icon_img('icon-streamlit.png', 18)} SYSTÈME DE PILOTAGE INDUSTRIEL</p>
 <div class="masthead-accent"></div>
 <div class="header-banner">
     <div class="header-left">
         <p class="header-title">GANTT DASHBOARD</p>
-        <span class="header-page-active">▸ {PAGE_LABELS[menu]}</span>
+        <span class="header-page-active">{icon_img('icon-arrow-right.png', 18)} {PAGE_LABELS[menu]}</span>
     </div>
     <div class="header-date">
         {now.strftime('%A').upper()}<br>
@@ -1044,7 +1220,7 @@ def piece_label(job_id: int) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — UPLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-if menu == "🗂 Données":
+if menu == "Données":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>DONNÉES DE PLANIFICATION</p>
@@ -1054,7 +1230,7 @@ if menu == "🗂 Données":
     col_upload, col_btn = st.columns([3, 1])
     with col_upload:
         excel_file = st.file_uploader(
-            "📎 Fichier Excel (template_gantt.xlsx)",
+            "Fichier Excel (template_gantt.xlsx)",
             type=["xlsx"], key="excel_solver",
             help="Utilisez le template fourni. Les 4 feuilles doivent être complètes."
         )
@@ -1105,7 +1281,7 @@ if menu == "🗂 Données":
             data_preview = parse_excel_to_dict(io.BytesIO(excel_bytes))
             ok_val, msg_val = validate_excel_data(data_preview)
             if not ok_val:
-                st.error(f"❌ Erreur dans le fichier : {msg_val}")
+                st.error(f"Erreur dans le fichier : {msg_val}")
             else:
                 p = data_preview['params']
                 c1p, c2p, c3p, c4p, c5p = st.columns(5)
@@ -1114,22 +1290,22 @@ if menu == "🗂 Données":
                 c3p.metric("OPÉRATIONS",  p['nbOps'])
                 c4p.metric("TECHNICIENS", data_preview['nbtechs'])
                 c5p.metric("SETUP (min)", data_preview['cte'])
-                st.success("✔ Fichier valide — prêt pour l'optimisation")
+                st.success("Fichier valide — prêt pour l'optimisation")
                 st.session_state["excel_data_cache"] = excel_bytes
                 st.session_state["cte"] = int(data_preview.get("cte", 0))
         except Exception as e:
-            st.error(f"❌ Impossible de lire le fichier : {e}")
+            st.error(f"Impossible de lire le fichier : {e}")
     else:
         st.markdown("""
         <p style='color:#8b949e;font-size:12px;font-family:Inter,sans-serif'>
-        ▸ Sans fichier uploadé, le solveur utilise les
+        """ + icon_img("icon-arrow-right.png", 16) + """ Sans fichier uploadé, le solveur utilise les
         <b style='color:#ff6b00'>données de test intégrées</b>
         (13 pièces · 15 machines · 30 opérations · 6 techniciens · cte=15 min).
         </p>""", unsafe_allow_html=True)
 
     if "data" in st.session_state:
         st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        st.markdown("<span class='status-badge'>⬡ DONNÉES EN MÉMOIRE</span>",
+        st.markdown(f"<span class='status-badge'>{icon_img('icon-hexagon.png', 16)} DONNÉES EN MÉMOIRE</span>",
                     unsafe_allow_html=True)
         st.dataframe(st.session_state["data"], use_container_width=True)
 
@@ -1144,15 +1320,15 @@ if menu == "🗂 Données":
                 solver_data = parse_excel_to_dict(
                     io.BytesIO(st.session_state["excel_data_cache"]))
             except Exception as e:
-                st.error(f"❌ Erreur lecture Excel : {e}")
+                st.error(f"Erreur lecture Excel : {e}")
                 st.stop()
         else:
             solver_data = DEFAULT_DATA
-            st.info("ℹ Aucun fichier uploadé — utilisation des données de test.")
+            st.info("Aucun fichier uploadé — utilisation des données de test.")
 
         ok_val, msg_val = validate_excel_data(solver_data)
         if not ok_val:
-            st.error(f"❌ Données invalides : {msg_val}")
+            st.error(f"Données invalides : {msg_val}")
             st.stop()
 
         st.session_state["cte"] = int(solver_data.get("cte", 0))
@@ -1176,7 +1352,7 @@ if menu == "🗂 Données":
         profile = solve_profiles[solve_mode]
 
         with st.spinner(
-            f"⚙ Résolution en cours — mode {solve_mode.lower()} "
+            f"Résolution en cours — mode {solve_mode.lower()} "
             f"({int(profile['max_time_seconds'])} s max)..."
         ):
             try:
@@ -1211,7 +1387,7 @@ if menu == "🗂 Données":
                 nb_pieces = df_result["JobID"].nunique()
 
                 st.success(
-                    f"✔ Solution trouvée — Makespan : **{makespan} min** · "
+                    f"Solution trouvée — Makespan : **{makespan} min** · "
                     f"{len(df_result)} opérations · {nb_pieces} pièces planifiées"
                 )
                 col_r1, col_r2 = st.columns([3, 1])
@@ -1225,12 +1401,12 @@ if menu == "🗂 Données":
                     st.metric("MACHINES",   df_result["MachineID"].nunique())
 
             except Exception as e:
-                st.error(f"❌ Erreur solveur : {e}")
+                st.error(f"Erreur solveur : {e}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — GANTT
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "🗓 Planning":
+elif menu == "Planning":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>DIAGRAMME DE GANTT</p>
@@ -1238,7 +1414,7 @@ elif menu == "🗓 Planning":
     </div>""", unsafe_allow_html=True)
 
     if "data" not in st.session_state:
-        st.info("⚠ Chargez d'abord vos données dans Upload Data")
+        st.info("Chargez d'abord vos données dans Upload Data")
     else:
         df_ops    = st.session_state["data"].copy()
         df_jobs   = st.session_state.get("df_jobs", None)
@@ -1262,39 +1438,40 @@ elif menu == "🗓 Planning":
                 df_ops["MachineLabel"].unique().tolist(),
                 key=lambda x: int(x.split()[-1])
             )
-            selected_machines = st.multiselect(
+            selected_machines = checkbox_dropdown(
                 "FILTRER PAR MACHINE",
                 machines,
-                default=machines,
-                key="planning_machine_filter",
-                help="Selectionnez une ou plusieurs machines a afficher."
+                key_prefix="planning_machine_filter",
+                default_selected=machines,
+                columns=2,
             )
         with col_day:
             all_day_options = [f"Jour {idx}" for idx in range(1, day_count + 1)]
-            day_options = all_day_options[-2:] if len(all_day_options) >= 2 else all_day_options
-            default_days = day_options
-            selected_days = st.multiselect(
+            default_days = all_day_options[-2:] if len(all_day_options) >= 2 else all_day_options
+            selected_days = checkbox_dropdown(
                 "FILTRER PAR JOUR",
-                day_options,
-                default=default_days,
-                key="planning_day_filter",
-                help="Selectionnez les jours visibles dans le diagramme."
+                all_day_options,
+                key_prefix="planning_day_filter",
+                default_selected=default_days,
+                columns=2,
             )
         with col_job:
             jobs = sorted(df_ops["JobID"].dropna().astype(int).unique().tolist())
             job_options = {piece_label(job_id): job_id for job_id in jobs}
-            selected_job_labels = st.multiselect(
+            selected_job_labels = checkbox_dropdown(
                 "FILTRER PAR PIECE / JOB",
                 list(job_options.keys()),
-                default=list(job_options.keys()),
-                key="planning_job_filter",
-                help="Selectionnez les pieces/jobs a afficher."
+                key_prefix="planning_job_filter",
+                default_selected=list(job_options.keys()),
+                columns=2,
             )
             selected_jobs = [job_options[label] for label in selected_job_labels]
 
-        df_f = df_ops if not selected_machines else df_ops[df_ops["MachineLabel"].isin(selected_machines)]
+        df_f = df_ops[df_ops["MachineLabel"].isin(selected_machines)]
         if selected_jobs:
             df_f = df_f[df_f["JobID"].isin(selected_jobs)]
+        else:
+            df_f = df_f.iloc[0:0]
         x_range = None
         if selected_days:
             selected_day_indexes = sorted(int(day.split()[-1]) - 1 for day in selected_days)
@@ -1308,22 +1485,28 @@ elif menu == "🗓 Planning":
                 day_mask = current_mask if isinstance(day_mask, bool) else (day_mask | current_mask)
             df_f = df_f[day_mask]
             x_range = (day_ranges[0][0], day_ranges[-1][1])
-        fig  = build_gantt(
-            df_f,
-            df_jobs,
-            of_map=of_map,
-            piece_map=piece_map,
-            start_time_day=start_time_day,
-            cte=cte_value,
-            x_range=x_range,
-        )
-        fig.update_layout(**chart_layout())
-        st.plotly_chart(fig, use_container_width=True)
+        else:
+            df_f = df_f.iloc[0:0]
+
+        if df_f.empty:
+            st.warning("Aucune operation ne correspond aux filtres selectionnes.")
+        else:
+            fig  = build_gantt(
+                df_f,
+                df_jobs,
+                of_map=of_map,
+                piece_map=piece_map,
+                start_time_day=start_time_day,
+                cte=cte_value,
+                x_range=x_range,
+            )
+            fig.update_layout(**chart_layout())
+            st.plotly_chart(fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 3 — KPIs
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "📈 KPI":
+elif menu == "KPI":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>INDICATEURS DE PERFORMANCE</p>
@@ -1331,7 +1514,7 @@ elif menu == "📈 KPI":
     </div>""", unsafe_allow_html=True)
 
     if "data" not in st.session_state:
-        st.info("⚠ Chargez d'abord vos données dans Upload Data")
+        st.info("Chargez d'abord vos données dans Upload Data")
     else:
         df      = st.session_state["data"].copy()
         df_jobs = st.session_state.get("df_jobs", None)
@@ -1374,7 +1557,7 @@ elif menu == "📈 KPI":
                     min_value=0, value=360, step=10, key="start_time_day")
                 st.caption(f"Heure affichee : {minutes_to_time(0, int(start_time_day))}")
 
-            st.info(f"📅 Makespan du lot courant : **{makespan} min**")
+            st.info(f"Makespan du lot courant : **{makespan} min**")
 
             jobs_en_retard = (job_cycle["Fin"] > due_date).sum()
             taux_retard    = round(jobs_en_retard / len(job_cycle) * 100, 1)
@@ -1388,17 +1571,17 @@ elif menu == "📈 KPI":
             c5.metric("IDLE TIME",        f"{taux_idle} %")
 
             st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-            st.markdown("<p class='section-title'>🔍 Insights automatiques</p>", unsafe_allow_html=True)
-            if taux_util_moyen < 60: st.warning("⚠ Sous-utilisation globale des machines")
-            if taux_util_moyen > 85: st.error("🚨 Risque de saturation des machines")
-            if taux_retard > 20:     st.warning("⚠ Taux de retard élevé → revoir ordonnancement")
-            if taux_idle > 30:       st.info("💡 Opportunité d'optimisation des ressources")
+            st.markdown(f"<p class='section-title'>{icon_img('icon-search.png', 18)} Insights automatiques</p>", unsafe_allow_html=True)
+            if taux_util_moyen < 60: st.warning("Sous-utilisation globale des machines")
+            if taux_util_moyen > 85: st.error("Risque de saturation des machines")
+            if taux_retard > 20:     st.warning("Taux de retard élevé -> revoir ordonnancement")
+            if taux_idle > 30:       st.info("Opportunité d'optimisation des ressources")
 
             st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            st.markdown("<p class='section-title'>🧠 Recommandations</p>", unsafe_allow_html=True)
-            if taux_idle > 25:       st.write("➡️ Réduire le nombre de machines ou regrouper les tâches")
-            if taux_util_moyen < 50: st.write("➡️ Augmenter la charge ou revoir planification")
-            if jobs_en_retard > 0:   st.write("➡️ Prioriser les pièces critiques ou ajuster séquencement")
+            st.markdown(f"<p class='section-title'>{icon_img('icon-brain.png', 18)} Recommandations</p>", unsafe_allow_html=True)
+            if taux_idle > 25:       st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Réduire le nombre de machines ou regrouper les tâches", unsafe_allow_html=True)
+            if taux_util_moyen < 50: st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Augmenter la charge ou revoir planification", unsafe_allow_html=True)
+            if jobs_en_retard > 0:   st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Prioriser les pièces critiques ou ajuster séquencement", unsafe_allow_html=True)
 
             score = max(0, min(100, round((taux_util_moyen - taux_idle - taux_retard), 1)))
             st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -1419,7 +1602,7 @@ elif menu == "📈 KPI":
             st.markdown("<p class='section-title'>Temps de cycle par pièce</p>", unsafe_allow_html=True)
             jcd = job_cycle.reset_index()[["JobLabel", "Debut", "Fin", "CycleTime"]]
             jcd.columns = ["Pièce", "Début", "Fin", "Cycle (min)"]
-            jcd["En retard"] = jcd["Fin"].apply(lambda x: "⚠ OUI" if x > due_date else "✔ NON")
+            jcd["En retard"] = jcd["Fin"].apply(lambda x: "OUI" if x > due_date else "NON")
             st.dataframe(jcd, use_container_width=True, hide_index=True)
 
         with tab2:
@@ -1490,7 +1673,7 @@ elif menu == "📈 KPI":
                         value=float(saved_val), step=1.0, key=f"pv_{jid}"
                     )
 
-            if st.button("▶ CALCULER PROFIT & MARGE"):
+            if st.button("CALCULER PROFIT & MARGE"):
                 save_prix(prix_vente, SID)
                 st.session_state["prix_db"] = prix_vente
 
@@ -1520,7 +1703,7 @@ elif menu == "📈 KPI":
                     df_profit = pd.merge(df_profit,
                         df_fallback[["JobLabel", "Qté", "Coût total (€)"]],
                         on="JobLabel", how="left")
-                    st.warning("⚠ Coûts calculés avec les paramètres par défaut.")
+                    st.warning("Coûts calculés avec les paramètres par défaut.")
 
                 df_profit["Pièce"]            = df_profit["JobLabel"]
                 df_profit["Prix vente (€/u)"] = df_profit["JobID"].map(prix_vente).fillna(0)
@@ -1553,10 +1736,10 @@ elif menu == "📈 KPI":
 
                 pieces_deficit = df_profit[df_profit["Profit (€)"] < 0]
                 if not pieces_deficit.empty:
-                    st.warning(f"⚠ {len(pieces_deficit)} pièce(s) déficitaire(s) : "
+                    st.warning(f"{len(pieces_deficit)} pièce(s) déficitaire(s) : "
                                f"{', '.join(pieces_deficit['Pièce'].tolist())}")
                 else:
-                    st.success("✔ Toutes les pièces sont rentables")
+                    st.success("Toutes les pièces sont rentables")
 
         with tab4:
             import plotly.graph_objects as go
@@ -1578,7 +1761,10 @@ elif menu == "📈 KPI":
                 "<p class='section-title'>Taux d'utilisation par machine"
                 " &nbsp;<span style='font-family:Inter,sans-serif;font-weight:400;"
                 "font-size:10px;color:#8b949e;text-transform:none;letter-spacing:0'>"
-                "🟢 ≥75% · 🔵 50-75% · 🟠 25-50% · 🔴 &lt;25%"
+                f"{icon_img('icon-green.png', 13)} ≥75% · "
+                f"{icon_img('icon-blue.png', 13)} 50-75% · "
+                f"{icon_img('icon-orange.png', 13)} 25-50% · "
+                f"{icon_img('icon-red.png', 13)} &lt;25%"
                 "</span></p>", unsafe_allow_html=True)
 
             fig_util = go.Figure()
@@ -1620,7 +1806,7 @@ elif menu == "📈 KPI":
                                 else "#ff6b00" if taux_util_moyen >= 50 else "#f59e0b")
                 fig_pie.add_annotation(
                     text=f"<b>{taux_util_moyen}%</b>", x=0.5, y=0.5,
-                    font=dict(size=22, color=center_color, family="Rajdhani"), showarrow=False)
+                    font=dict(size=22, color=center_color, family="Inter"), showarrow=False)
                 fig_pie.update_layout(**chart_layout(height=420, showlegend=False))
                 st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -1673,7 +1859,7 @@ elif menu == "📈 KPI":
                         fig_profit.update_layout(**chart_layout(
                             height=440,
                             title=dict(text="Profit (€) par pièce",
-                                       font=dict(color="#ff6b00", size=12, family="Rajdhani"), x=0.01),
+                                       font=dict(color="#ff6b00", size=12, family="Inter"), x=0.01),
                             yaxis=dict(title="Profit (€)", gridcolor="#21262d", color="#8b949e"),
                             xaxis=dict(gridcolor="#21262d", color="#8b949e")
                         ))
@@ -1701,7 +1887,7 @@ elif menu == "📈 KPI":
                         fig_marge.update_layout(**chart_layout(
                             height=440,
                             title=dict(text="Marge (%) par pièce",
-                                       font=dict(color="#ff6b00", size=12, family="Rajdhani"), x=0.01),
+                                       font=dict(color="#ff6b00", size=12, family="Inter"), x=0.01),
                             yaxis=dict(title="Marge (%)", gridcolor="#21262d", color="#8b949e"),
                             xaxis=dict(gridcolor="#21262d", color="#8b949e")
                         ))
@@ -1735,12 +1921,12 @@ elif menu == "📈 KPI":
                     ))
                     st.plotly_chart(fig_cout, use_container_width=True)
             else:
-                st.info("⚠ Calculez d'abord le Profit & Marge dans l'onglet correspondant")
+                st.info("Calculez d'abord le Profit & Marge dans l'onglet correspondant")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 4 — HISTORIQUE
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "🕘 Historique":
+elif menu == "Historique":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>HISTORIQUE DES PLANIFICATIONS</p>
@@ -1751,7 +1937,7 @@ elif menu == "🕘 Historique":
         jours = load_planning_jours(SID)
 
         if not jours:
-            st.info("⚠ Aucun planning sauvegardé. Utilisez 'ARCHIVER LE JOUR' dans la barre latérale.")
+            st.info("Aucun planning sauvegardé. Utilisez 'ARCHIVER LE JOUR' dans la barre latérale.")
         else:
             count_label = "PLANNING SAUVEGARDÉ" if len(jours) == 1 else "PLANNINGS SAUVEGARDÉS"
             st.markdown(f"<p class='section-title'>{len(jours)} {count_label}</p>",
@@ -1812,7 +1998,7 @@ elif menu == "🕘 Historique":
                             if not df_j_h.empty:
                                 st.session_state["df_jobs"] = df_j_h
                                 save_jobs(df_j_h, SID)
-                            st.success(f"✔ Planning du {jour_str} rechargé")
+                            st.success(f"Planning du {jour_str} rechargé")
                             st.rerun()
 
                         try:
@@ -1835,13 +2021,13 @@ elif menu == "🕘 Historique":
                             pass
 
     except Exception as e:
-        st.error(f"❌ Erreur chargement historique : {e}")
+        st.error(f"Erreur chargement historique : {e}")
         st.info("Vérifiez que la table 'planning_jours' existe dans Supabase.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — DOWNLOAD
 # ══════════════════════════════════════════════════════════════════════════════
-elif menu == "📊 Analytics":
+elif menu == "Analytics":
     if st.session_state.get("user_role") != "admin":
         st.error("Acces reserve aux administrateurs.")
         st.stop()
@@ -1871,7 +2057,7 @@ elif menu == "📊 Analytics":
     else:
         st.dataframe(logs, use_container_width=True, hide_index=True)
 
-elif menu == "⤓ Export":
+elif menu == "Export":
     st.markdown("""
     <div class='page-header-bar'>
         <p class='page-title'>EXPORT DES RÉSULTATS</p>
@@ -1879,7 +2065,7 @@ elif menu == "⤓ Export":
     </div>""", unsafe_allow_html=True)
 
     if "data_kpi" not in st.session_state:
-        st.info("⚠ Calculez d'abord les KPIs (onglet Profit & Marge)")
+        st.info("Calculez d'abord les KPIs (onglet Profit & Marge)")
     else:
         df_kpi    = st.session_state["data_kpi"]
         df_ops    = st.session_state.get("data")
@@ -1890,8 +2076,8 @@ elif menu == "⤓ Export":
         c1, c2, c3 = st.columns(3, gap="large")
 
         with c1:
-            st.markdown("""<div class='dl-card'>
-                <span class='dl-icon'>📄</span>
+            st.markdown(f"""<div class='dl-card'>
+                {icon_img('icon-document.png', 32, 'dl-icon-img')}
                 <span class='dl-label'>Export CSV — KPIs</span>
             </div>""", unsafe_allow_html=True)
             st.download_button("TÉLÉCHARGER CSV", to_csv_bytes(df_kpi),
@@ -1913,8 +2099,8 @@ elif menu == "⤓ Export":
                         pass
                 if "df_cout" in st.session_state:
                     st.session_state["df_cout"].to_excel(w, sheet_name="Coûts", index=False)
-            st.markdown("""<div class='dl-card'>
-                <span class='dl-icon'>📊</span>
+            st.markdown(f"""<div class='dl-card'>
+                {icon_img('icon-chart.png', 32, 'dl-icon-img')}
                 <span class='dl-label'>Rapport Excel complet</span>
             </div>""", unsafe_allow_html=True)
             st.download_button("TÉLÉCHARGER EXCEL", buf.getvalue(), "rapport.xlsx",
@@ -1938,11 +2124,11 @@ elif menu == "⤓ Export":
                     cte=int(st.session_state.get("cte", 0)),
                 )
                 gantt_html = pio.to_html(fig, full_html=True, include_plotlyjs="cdn")
-                st.markdown("""<div class='dl-card'>
-                    <span class='dl-icon'>📅</span>
+                st.markdown(f"""<div class='dl-card'>
+                    {icon_img('icon-calendar.png', 32, 'dl-icon-img')}
                     <span class='dl-label'>Gantt HTML interactif</span>
                 </div>""", unsafe_allow_html=True)
                 st.download_button("TÉLÉCHARGER GANTT", gantt_html.encode("utf-8"),
                                    "gantt.html", "text/html", use_container_width=True)
             else:
-                st.info("⚠ Chargez d'abord vos données pour exporter le Gantt")
+                st.info("Chargez d'abord vos données pour exporter le Gantt")
