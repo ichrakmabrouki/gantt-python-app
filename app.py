@@ -33,6 +33,9 @@ from backend.data_processor import load_file, validate, parse_and_clean, to_csv_
 from backend.gantt_builder  import WORKDAY_MINUTES, build_gantt, minutes_to_time
 from backend.kpi_calculator import compute_kpis, summary_by_machine, summary_by_job
 from backend.database       import (
+    DatabaseUnavailable,
+    SESSION_DURATION_DAYS,
+    should_refresh_session_token,
     init_db,
     save_operations, load_operations,
     save_jobs,       load_jobs,
@@ -114,18 +117,43 @@ if st.session_state.get("force_login"):
 if session_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
     username = verify_session_token(session_cookie)
     if username:
-        user = get_user(username)
+        try:
+            user = get_user(username)
+        except DatabaseUnavailable as exc:
+            # Base injoignable : on NE supprime surtout PAS le cookie, sinon
+            # une simple pause Supabase deconnecte definitivement tout le
+            # monde. La session reprendra des que la base repond.
+            user = None
+            st.session_state["db_error"] = str(exc)
+
         if user:
             st.session_state["authenticated"] = True
             st.session_state["SID"] = username
             st.session_state["user_role"] = user.get("role", "user")
-        else:
+
+            # ── Renouvellement glissant (equivalent refresh token) ─────────
+            # Le token est reemis quand il approche de l'expiration, une
+            # seule fois par session Streamlit.
+            if (should_refresh_session_token(session_cookie)
+                    and not st.session_state.get("session_refreshed")):
+                st.session_state["session_refreshed"] = True
+                cookie_manager.set(
+                    "gantt_session",
+                    create_session_token(username),
+                    expires_at=datetime.now() + timedelta(days=SESSION_DURATION_DAYS),
+                )
+        elif not st.session_state.get("db_error"):
             cookie_manager.delete("gantt_session")
     else:
         cookie_manager.delete("gantt_session")
 
 if legacy_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
-    user = get_user(legacy_cookie)
+    try:
+        user = get_user(legacy_cookie)
+    except DatabaseUnavailable as exc:
+        user = None
+        st.session_state["db_error"] = str(exc)
+
     if user:
         st.session_state["authenticated"] = True
         st.session_state["SID"] = legacy_cookie.strip().lower()
@@ -133,9 +161,10 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
         cookie_manager.set(
             "gantt_session",
             create_session_token(st.session_state["SID"]),
-            expires_at=datetime.now() + timedelta(days=7)
+            expires_at=datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
         )
-    cookie_manager.delete("gantt_user")
+    if not st.session_state.get("db_error"):
+        cookie_manager.delete("gantt_user")
 
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
@@ -147,6 +176,11 @@ if not st.session_state["authenticated"]:
         <p>Planification, suivi de charge, KPI et historiques de production dans un espace securise.</p>
     </div>
     """, unsafe_allow_html=True)
+
+    # Bandeau si la reprise de session a echoue parce que la base est HS —
+    # evite de laisser croire a un probleme d'identifiants.
+    if st.session_state.get("db_error"):
+        st.error(st.session_state.pop("db_error"))
 
     tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
 
@@ -163,9 +197,17 @@ if not st.session_state["authenticated"]:
             if not u or not p:
                 st.error("Identifiant et mot de passe obligatoires")
             else:
-                user = get_user(u)
+                db_error = None
+                try:
+                    user = get_user(u)
+                except DatabaseUnavailable as exc:
+                    user = None
+                    db_error = str(exc)
 
-                if user and verify_password(p, user.get("password")):
+                if db_error:
+                    st.error(db_error)
+
+                elif user and verify_password(p, user.get("password")):
                     clear_auth_session()
                     st.session_state["authenticated"] = True
                     st.session_state["SID"] = u
