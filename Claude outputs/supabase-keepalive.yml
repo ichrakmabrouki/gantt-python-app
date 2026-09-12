@@ -1,0 +1,31 @@
+# A placer dans : .github/workflows/supabase-keepalive.yml
+name: Supabase keep-alive
+
+# Empeche la mise en pause automatique du projet Supabase (plan gratuit :
+# pause apres ~7 jours sans activite). Une simple requete de lecture suffit.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1,4"   # lundi et jeudi a 06:00 UTC
+  workflow_dispatch:         # permet aussi de le lancer a la main
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping de l'API Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/out.txt -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            "${SUPABASE_URL}/rest/v1/users?select=username&limit=1")
+          echo "HTTP ${code}"
+          cat /tmp/out.txt
+          if [ "${code}" -ge 400 ]; then
+            echo "::error::Supabase a repondu ${code}"
+            exit 1
+          fi
