@@ -20,6 +20,48 @@ from supabase import Client, create_client
 PBKDF2_ITERATIONS = 200_000
 SESSION_DURATION_DAYS = 7
 
+# Renouvellement glissant : quand il reste moins que ce nombre de jours au
+# cookie de session, un nouveau token est emis. Un utilisateur qui ouvre
+# l'application au moins une fois tous les 7 jours n'est donc jamais
+# deconnecte, sans pour autant qu'un token vole reste valide indefiniment.
+SESSION_REFRESH_THRESHOLD_DAYS = 3
+
+
+class DatabaseUnavailable(Exception):
+    """Supabase est injoignable (DNS, reseau, projet en pause ou supprime)."""
+
+
+_CONNECTION_MARKERS = (
+    "name or service not known",
+    "temporary failure in name resolution",
+    "nodename nor servname",
+    "getaddrinfo",
+    "no address associated",
+    "network is unreachable",
+    "connection refused",
+    "connection reset",
+    "connecterror",
+    "connecttimeout",
+    "failed to establish",
+    "max retries exceeded",
+)
+
+
+def _is_connection_error(exc: BaseException) -> bool:
+    """Distingue une panne reseau/DNS d'une vraie erreur metier."""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _CONNECTION_MARKERS)
+
+
+def _connection_hint(exc: BaseException) -> str:
+    return (
+        "Base de donnees injoignable. Le projet Supabase est probablement en "
+        "pause (plan gratuit : pause automatique apres ~7 jours d'inactivite), "
+        "supprime, ou l'URL dans .streamlit/secrets.toml est incorrecte. "
+        "Ouvre https://supabase.com/dashboard et clique sur Restore si le "
+        f"projet est en pause. [Detail technique : {type(exc).__name__}: {exc}]"
+    )
+
 
 def _get_secret(name: str) -> str | None:
     try:
@@ -127,6 +169,33 @@ def verify_session_token(token: str | None) -> str | None:
         return _normalize_username(username)
     except Exception:
         return None
+
+
+def session_token_expiry(token: str | None) -> datetime | None:
+    """Date d'expiration d'un token VALIDE, sinon None."""
+    if not verify_session_token(token):
+        return None
+    try:
+        decoded = base64.urlsafe_b64decode(token.encode("utf-8")).decode("utf-8")
+        _, expires_ts, _ = decoded.split("|", 2)
+        return datetime.fromtimestamp(int(expires_ts), tz=timezone.utc)
+    except Exception:
+        return None
+
+
+def should_refresh_session_token(token: str | None) -> bool:
+    """True si le token est encore valide mais proche de l'expiration.
+
+    C'est l'equivalent d'un refresh token : au lieu de demander a
+    l'utilisateur de se reconnecter tous les 7 jours, on reemet un token
+    neuf tant qu'il reste actif.
+    """
+    expiry = session_token_expiry(token)
+    if expiry is None:
+        return False
+    remaining = expiry - datetime.now(timezone.utc)
+    return remaining < timedelta(days=SESSION_REFRESH_THRESHOLD_DAYS)
+
 
 @st.cache_resource
 def get_client() -> Client:
@@ -395,7 +464,12 @@ def get_user(username: str) -> dict | None:
 
         return res.data[0]
 
-    except Exception:
+    except Exception as e:
+        # Une panne reseau/DNS ne doit PAS etre confondue avec
+        # "utilisateur introuvable" : sinon l'ecran de connexion affiche
+        # "Identifiant ou mot de passe incorrect" alors que la base est morte.
+        if _is_connection_error(e):
+            raise DatabaseUnavailable(_connection_hint(e)) from e
         return None
 
 
@@ -420,7 +494,11 @@ def create_user(username: str, password: str, role: str = "user") -> tuple[bool,
 
         return True, "OK"
 
+    except DatabaseUnavailable as e:
+        return False, str(e)
     except Exception as e:
+        if _is_connection_error(e):
+            return False, _connection_hint(e)
         return False, str(e)
 
 
