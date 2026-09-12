@@ -25,10 +25,18 @@ def solve_flexible_jobshop(
     }
 
     nbOps  = params['nbOps']
-    M_big  = 10000
 
     # ── Horizon ───────────────────────────────────────────────────────────────
     horizon = sum(pt.values()) + cte * nbOps * 2 + max(machine_ready_times.values(), default=0)
+
+    # ── Big-M ─────────────────────────────────────────────────────────────────
+    # M_big doit couvrir tout l'horizon. Sinon les contraintes du type
+    #   s[o2,m2] >= e[o1,m1] - M_big*(1-x[o1,m1]) - M_big*(1-x[o2,m2])
+    # ne se relachent pas quand l'operation n'est pas assignee : le modele
+    # devient sur-contraint et renvoie INFEASIBLE (ou un planning faux) sur les
+    # gros jeux de donnees. Avant : constante fixe 10000, alors que l'horizon
+    # depasse 100000 sur un dataset de 100 pieces.
+    M_big  = horizon
 
     # ── Index utiles ──────────────────────────────────────────────────────────
     all_ops   = list(set(o for (o, m) in modes))
