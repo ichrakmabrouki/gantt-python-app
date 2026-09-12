@@ -1,4 +1,18 @@
+# Secrets — ne JAMAIS commiter
 .streamlit/secrets.toml
+.env
+
+# Python
 __pycache__/
 *.pyc
-.env
+
+# Logs et bases locales
+*.log
+*.db
+
+# Sorties generees
+exports/
+
+# Documents personnels (CV, rapports) — n'ont pas leur place dans le depot
+*.docx
+pfe_extracted_text.txt
