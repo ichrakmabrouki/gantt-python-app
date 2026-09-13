@@ -221,18 +221,18 @@ import math
 import random
 
 
-def _motif_reseau(largeur: int = 1200, hauteur: int = 220,
-                  noeuds: int = 26, graine: int = 7) -> str:
+def _motif_reseau(largeur: int = 1600, hauteur: int = 150,
+                  noeuds: int = 36, graine: int = 7) -> str:
     """SVG du reseau anime. Graine fixe : le motif ne change pas d'une
     execution a l'autre."""
     alea = random.Random(graine)
 
     # Points repartis sur une grille bruitee : ni alignes, ni agglutines.
-    points, colonnes, rangees = [], 7, 4
+    points, colonnes, rangees = [], 9, 4
     for i in range(noeuds):
         col, rang = i % colonnes, (i // colonnes) % rangees
-        x = (col + 0.5) * largeur / colonnes + alea.uniform(-46, 46)
-        y = (rang + 0.5) * hauteur / rangees + alea.uniform(-26, 26)
+        x = (col + 0.5) * largeur / colonnes + alea.uniform(-52, 52)
+        y = (rang + 0.5) * hauteur / rangees + alea.uniform(-18, 18)
         points.append((round(min(max(x, 12), largeur - 12), 1),
                        round(min(max(y, 12), hauteur - 12), 1)))
 
@@ -240,10 +240,10 @@ def _motif_reseau(largeur: int = 1200, hauteur: int = 220,
     liens = []
     for i, (x1, y1) in enumerate(points):
         for j, (x2, y2) in enumerate(points[i + 1:], start=i + 1):
-            if math.dist((x1, y1), (x2, y2)) < 190:
+            if math.dist((x1, y1), (x2, y2)) < 215:
                 liens.append((i, j))
     alea.shuffle(liens)
-    liens = liens[:34]
+    liens = liens[:46]
 
     traces_liens = "".join(
         f'<line class="l l{n % 4}" x1="{points[i][0]}" y1="{points[i][1]}" '
@@ -258,11 +258,11 @@ def _motif_reseau(largeur: int = 1200, hauteur: int = 220,
 
     # Impulsions : quelques points qui parcourent un lien d'un bout a l'autre.
     impulsions = ""
-    for k, (i, j) in enumerate(liens[:5]):
+    for k, (i, j) in enumerate(liens[:7]):
         (x1, y1), (x2, y2) = points[i], points[j]
         impulsions += (
             f'<circle class="p" r="2.6" cx="0" cy="0" '
-            f'style="animation-delay:{k * 1.7:.1f}s;'
+            f'style="animation-delay:{k * 1.2:.1f}s;'
             f'--x1:{x1}px;--y1:{y1}px;--x2:{x2}px;--y2:{y2}px"/>'
         )
 
@@ -292,38 +292,52 @@ def _motif_reseau(largeur: int = 1200, hauteur: int = 220,
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {largeur} {hauteur}" '
-        f'width="{largeur}" height="{hauteur}" preserveAspectRatio="xMaxYMid slice">'
+        f'width="{largeur}" height="{hauteur}" preserveAspectRatio="xMidYMid slice">'
         f'<style>{style}</style>'
-        f'<defs><linearGradient id="f" x1="0" x2="1">'
-        f'<stop offset="0" stop-color="#000"/>'
-        f'<stop offset=".38" stop-color="#000"/>'
-        f'<stop offset=".72" stop-color="#fff"/>'
-        f'<stop offset="1" stop-color="#fff"/></linearGradient>'
-        f'<mask id="m"><rect width="{largeur}" height="{hauteur}" fill="url(#f)"/></mask>'
+        # Le motif occupe toute la largeur du bandeau et s'efface a ses
+        # quatre bords, pour qu'aucune ligne ne s'arrete net.
+        f'<defs>'
+        f'<linearGradient id="h" x1="0" x2="1">'
+        f'<stop offset="0" stop-color="#000"/><stop offset=".07" stop-color="#fff"/>'
+        f'<stop offset=".93" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
+        f'</linearGradient>'
+        f'<linearGradient id="v" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="#555"/><stop offset=".3" stop-color="#fff"/>'
+        f'<stop offset=".82" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
+        f'</linearGradient>'
+        f'<mask id="mh"><rect width="{largeur}" height="{hauteur}" fill="url(#h)"/></mask>'
+        f'<mask id="mv"><rect width="{largeur}" height="{hauteur}" fill="url(#v)"/></mask>'
         f'</defs>'
-        f'<g mask="url(#m)">{traces_liens}{impulsions}{traces_noeuds}</g>'
+        f'<g mask="url(#mh)"><g mask="url(#mv)">'
+        f'{traces_liens}{impulsions}{traces_noeuds}</g></g>'
         f'</svg>'
     )
 
 
+BANDEAU_RESEAU = "<div class='bandeau-reseau'></div>"
+
+
 def css_reseau() -> str:
-    """Pose le reseau en fond du bandeau de titre et de l'ecran de connexion."""
+    """Pose le reseau dans la bande vide du haut de page.
+
+    Il occupait d'abord le fond du bandeau de titre, ou il devait s'effacer
+    sous le texte : la moitie du motif etait perdue. Il occupe desormais la
+    bande vide qui surmonte ce titre, sur toute la largeur, sans rien a
+    menager — c'est le seul endroit de la page ou un motif ne gene personne.
+    """
     motif = base64.b64encode(_motif_reseau().encode("utf-8")).decode("ascii")
     return f"""<style>
-.header-banner, .login-hero {{
-    position: relative;
-    overflow: hidden;
-    background-image: url("data:image/svg+xml;base64,{motif}"), var(--verre) !important;
-    background-repeat: no-repeat, no-repeat;
-    background-position: right center, center;
-    background-size: auto 100%, cover;
+.bandeau-reseau {{
+    height: 120px;
+    margin: -26px 0 -6px 0;
+    background-image: url("data:image/svg+xml;base64,{motif}");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    pointer-events: none;
 }}
-/* Le contenu passe devant le motif. */
-.header-banner > *, .login-hero > * {{ position: relative; z-index: 1; }}
 @media (max-width: 820px) {{
-    /* Sur telephone, le bandeau est etroit et le titre passe sur deux lignes :
-       le motif encombrerait au lieu d'habiller. */
-    .header-banner, .login-hero {{ background-image: var(--verre) !important; }}
+    .bandeau-reseau {{ height: 64px; margin: -10px 0 -4px 0; }}
 }}
 </style>"""
 
