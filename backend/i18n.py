@@ -101,11 +101,15 @@ TRADUCTIONS: dict[str, dict[str, str]] = {
     },
 
     # ── Apparence ─────────────────────────────────────────────────────────────
-    "theme_clair":  {"fr": "☀ CLAIR",  "en": "☀ LIGHT"},
-    "theme_sombre": {"fr": "☾ SOMBRE", "en": "☾ DARK"},
-    "theme_aide":   {"fr": "Basculer entre le mode clair et le mode sombre",
-                     "en": "Switch between light and dark mode"},
     "langue_aide":  {"fr": "Switch to English", "en": "Passer en français"},
+
+    # ── Performance ───────────────────────────────────────────────────────────
+    "perf_titre":      {"fr": "Ce que l'optimisation rapporte",
+                        "en": "What the optimisation is worth"},
+    "perf_manuel":     {"fr": "Ordonnancement manuel", "en": "Manual schedule"},
+    "perf_optimise":   {"fr": "Optimisé", "en": "Optimised"},
+    "perf_borne":      {"fr": "Borne inférieure", "en": "Lower bound"},
+    "perf_gain":       {"fr": "Temps gagné", "en": "Time saved"},
 }
 
 
