@@ -3,6 +3,8 @@ import plotly.colors as pc
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
+from backend.ui_theme import PALETTES
+
 
 DEFAULT_START_MINUTES = 360
 WORKDAY_MINUTES = 16 * 60
@@ -37,16 +39,29 @@ def build_gantt(
     start_time_day: int = DEFAULT_START_MINUTES,
     cte: int = 0,
     x_range: tuple[int, int] | None = None,
+    palette: dict | None = None,
 ) -> go.Figure:
+    # Le Gantt etait entierement code en sombre : sur fond blanc, il devenait
+    # un rectangle noir au texte gris. Les couleurs viennent maintenant de la
+    # palette du theme actif ; sans argument, on garde le mode sombre.
+    pal = palette or PALETTES["sombre"]
+    c_texte  = pal["texte"]
+    c_faible = pal["texteFaible"]
+    c_grille = pal["bordure"]
+    c_fond   = pal["fond"]
+    c_accent = pal["accent3"]   # orange assombri : lisible sur fond blanc
+    c_danger = pal["danger"]
+    c_panneau = pal["surface"]
+
     df = df_ops.copy()
 
     if df.empty:
         fig = go.Figure()
         fig.update_layout(
             title="Diagramme de Gantt",
-            plot_bgcolor="#0d1117",
+            plot_bgcolor=c_fond,
             paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(family="Inter", size=12, color="#c9d1d9"),
+            font=dict(family="Inter", size=12, color=c_texte),
         )
         return fig
 
@@ -179,7 +194,7 @@ def build_gantt(
             x1=makespan,
             y0=-0.5,
             y1=machine_count - 0.5,
-            line=dict(color="#f85149", width=2.5, dash="dash"),
+            line=dict(color=c_danger, width=2.5, dash="dash"),
         )
         fig.add_annotation(
             x=makespan,
@@ -189,7 +204,7 @@ def build_gantt(
             arrowhead=2,
             ax=0,
             ay=-30,
-            font=dict(color="#f85149", size=12),
+            font=dict(color=c_danger, size=12),
         )
 
     tick_step = 4 * 60
@@ -206,14 +221,14 @@ def build_gantt(
                 x1=day_start,
                 y0=-0.5,
                 y1=machine_count - 0.5,
-                line=dict(color="#30363d", width=1.6, dash="dot"),
+                line=dict(color=c_grille, width=1.6, dash="dot"),
             )
         fig.add_annotation(
             x=day_start + (WORKDAY_MINUTES / 2),
             y=machine_count - 0.25,
             text=f"Jour {day_index + 1}",
             showarrow=False,
-            font=dict(color="#8b949e", size=11),
+            font=dict(color=c_faible, size=11),
         )
 
     now = datetime.now()
@@ -227,23 +242,23 @@ def build_gantt(
                 x1=now_x,
                 y0=-0.5,
                 y1=machine_count - 0.5,
-                line=dict(color="#ffffff", width=1.8, dash="dot"),
+                line=dict(color=c_texte, width=1.8, dash="dot"),
             )
             fig.add_annotation(
                 x=now_x,
                 y=-0.35,
                 text=f"Maintenant : {now.strftime('%H:%M')}",
                 showarrow=False,
-                font=dict(color="#ffffff", size=10),
-                bgcolor="rgba(13,17,23,0.85)",
+                font=dict(color=c_fond, size=10),
+                bgcolor=c_texte,
             )
 
     fig.update_xaxes(
         tickvals=tickvals,
         ticktext=[hour_tick_label(value, start_time_day) for value in tickvals],
         title="Heures",
-        color="#8b949e",
-        gridcolor="#21262d",
+        color=c_faible,
+        gridcolor=c_grille,
         range=[view_start, view_end],
         tickfont=dict(size=7),
         tickangle=0,
@@ -253,25 +268,25 @@ def build_gantt(
     fig.update_yaxes(
         autorange="reversed",
         title="Machines",
-        color="#8b949e",
-        gridcolor="#21262d",
+        color=c_faible,
+        gridcolor=c_grille,
     )
     fig.update_layout(
         barmode="overlay",
         title=dict(
             text="Diagramme de Gantt - Ordonnancement continu multi-jours",
-            font=dict(family="Inter", color="#ff6b00", size=14),
+            font=dict(family="Inter", color=c_accent, size=14),
         ),
         height=160 + 70 * machine_count,
-        font=dict(family="Inter", size=12, color="#c9d1d9"),
-        plot_bgcolor="#0d1117",
+        font=dict(family="Inter", size=12, color=c_texte),
+        plot_bgcolor=c_fond,
         paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(
-            title=dict(text="Pieces", font=dict(color="#ff6b00")),
+            title=dict(text="Pieces", font=dict(color=c_accent)),
             orientation="v",
-            font=dict(color="#c9d1d9"),
-            bgcolor="rgba(22,27,34,0.8)",
-            bordercolor="#30363d",
+            font=dict(color=c_texte),
+            bgcolor=c_panneau,
+            bordercolor=c_grille,
             borderwidth=1,
         ),
         margin=dict(l=10, r=10, t=60, b=52),
