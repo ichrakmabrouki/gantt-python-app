@@ -83,6 +83,161 @@ html {{ color-scheme: {p['schema']}; }}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# CORRECTIF DE CONTRASTE
+# ══════════════════════════════════════════════════════════════════════════════
+# Streamlit habille lui-même une partie de l'interface : menus déroulants,
+# info-bulles, barre d'outils, flèches des champs numériques, tableaux. Ces
+# éléments suivent le thème déclaré dans `.streamlit/config.toml`, pas notre
+# bloc `:root`. Tant qu'ils n'étaient pas repris ici, la bascule en mode clair
+# laissait des fonds sombres sous des textes et des icônes devenus noirs —
+# donc illisibles.
+#
+# Ce bloc est injecté APRÈS la feuille de style principale, pour passer devant.
+# Il n'utilise que des variables : il vaut donc pour les deux modes.
+CSS_CORRECTIF = """<style>
+
+/* Fenêtres flottantes : listes déroulantes, menus, info-bulles */
+[data-baseweb="popover"] > div,
+[data-baseweb="menu"],
+[data-baseweb="tooltip"],
+[data-baseweb="calendar"],
+[data-baseweb="datepicker"],
+[role="listbox"],
+[role="tooltip"] {
+    background: var(--surface) !important;
+    color: var(--texte) !important;
+    border: 1px solid var(--bordure) !important;
+}
+[data-baseweb="menu"] li,
+[role="option"] {
+    background: transparent !important;
+    color: var(--texte) !important;
+}
+[data-baseweb="menu"] li:hover,
+[role="option"]:hover,
+[role="option"][aria-selected="true"] {
+    background: var(--surface2) !important;
+    color: var(--accent) !important;
+}
+
+/* Barre d'outils et en-tête de Streamlit */
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"] {
+    background: transparent !important;
+}
+[data-testid="stToolbar"] button,
+[data-testid="stMainMenu"] button {
+    color: var(--texte) !important;
+}
+
+/* Une icône ne décide jamais seule de sa couleur : elle suit son texte.
+   C'est ce qui évitait une icône noire sur un bouton resté sombre. */
+button svg,
+summary svg,
+label svg,
+[data-testid="stToolbar"] svg,
+[data-baseweb="select"] svg,
+[data-testid="stExpander"] svg,
+[data-testid="stNumberInputStepUp"] svg,
+[data-testid="stNumberInputStepDown"] svg {
+    fill: currentColor !important;
+    stroke: currentColor !important;
+    color: inherit !important;
+}
+.stButton > button *,
+[data-testid="stFormSubmitButton"] > button *,
+.stDownloadButton > button * {
+    color: inherit !important;
+}
+
+/* Tout bouton a un fond explicite : plus de texte sombre sur fond sombre */
+[data-testid="stFormSubmitButton"] > button {
+    background: var(--accent) !important;
+    border: 1px solid var(--accent) !important;
+    color: var(--fond) !important;
+    font-weight: 700 !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover {
+    background: var(--accent2) !important;
+    border-color: var(--accent2) !important;
+}
+[data-testid="stExpander"] [data-testid="stFormSubmitButton"] > button {
+    min-height: 30px !important;
+    font-size: 11px !important;
+}
+[data-testid="stNumberInputStepUp"],
+[data-testid="stNumberInputStepDown"] {
+    background: var(--surface2) !important;
+    color: var(--texte) !important;
+    border-color: var(--bordure) !important;
+}
+
+/* Tableaux : la grille est dessinée dans un canvas, elle ne se colore
+   qu'à travers ses propres variables. */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrameResizable"],
+[data-testid="stDataFrameResizable"] > div {
+    --gdg-bg-cell: var(--surface);
+    --gdg-bg-cell-medium: var(--surface2);
+    --gdg-bg-header: var(--surface2);
+    --gdg-bg-header-hovered: var(--surface2);
+    --gdg-bg-header-has-focus: var(--surface2);
+    --gdg-text-dark: var(--texte);
+    --gdg-text-medium: var(--texte);
+    --gdg-text-light: var(--texteFaible);
+    --gdg-text-header: var(--texteFaible);
+    --gdg-text-header-selected: var(--accent);
+    --gdg-border-color: var(--bordure);
+    --gdg-horizontal-border-color: var(--bordure);
+    --gdg-accent-color: var(--accent);
+    --gdg-accent-fg: var(--fond);
+    --gdg-accent-light: var(--voile);
+    --gdg-bg-bubble: var(--surface2);
+    --gdg-bg-bubble-selected: var(--surface2);
+    --gdg-bg-search-result: var(--voile);
+    --gdg-fg-icon-header: var(--texteFaible);
+}
+
+/* Messages d'information, blocs de code, onglets */
+[data-testid="stAlert"] {
+    background: var(--surface2) !important;
+    border: 1px solid var(--bordure) !important;
+    border-left: 3px solid var(--accent) !important;
+}
+[data-testid="stAlert"] * { color: var(--texte) !important; }
+pre, code, [data-testid="stCode"] {
+    background: var(--surface2) !important;
+    color: var(--texte) !important;
+}
+/* Barre d'outils des graphiques Plotly */
+.modebar, .modebar-group { background: transparent !important; }
+.modebar-btn path { fill: var(--texteFaible) !important; }
+.modebar-btn:hover path { fill: var(--accent) !important; }
+
+.stTabs [data-baseweb="tab"] { color: var(--texteFaible) !important; }
+.stTabs [data-baseweb="tab"][aria-selected="true"] { color: var(--accent) !important; }
+
+/* Badge de session : orange, pas vert */
+.status-badge-accent {
+    background: var(--surface2) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
+/* Cases à cocher et boutons radio */
+[data-testid="stCheckbox"] label span,
+[data-testid="stRadio"] label span { color: var(--texte) !important; }
+</style>"""
+
+
+def css_correctif(mode: str = "sombre") -> str:
+    """Correctif de contraste ; identique dans les deux modes, il ne lit que
+    les variables du bloc `:root` déjà injecté."""
+    return CSS_CORRECTIF
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ADAPTATION MOBILE
 # ══════════════════════════════════════════════════════════════════════════════
 # Streamlit ne replie pas les colonnes tout seul : sur un téléphone, un
