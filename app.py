@@ -336,6 +336,27 @@ if st.session_state.get("authenticated") and st.session_state.get("user_role") =
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL
 # ══════════════════════════════════════════════════════════════════════════════
+# ── Thème : variables CSS injectées avant la feuille de style ──────────────
+# Toute la feuille ci-dessous n'utilise plus que des var(--...). Changer de
+# mode revient donc à réécrire ce seul bloc :root.
+from backend.ui_theme import css_variables, CSS_MOBILE, BANNIERE_MOBILE
+
+if "theme" not in st.session_state:
+    st.session_state["theme"] = "sombre"
+if "langue" not in st.session_state:
+    st.session_state["langue"] = "fr"
+
+from backend.i18n import traduire
+LANGUE = st.session_state["langue"]
+
+
+def t(cle: str) -> str:
+    """Raccourci de traduction, lie a la langue de la session."""
+    return traduire(cle, LANGUE)
+
+st.markdown(css_variables(st.session_state["theme"]), unsafe_allow_html=True)
+st.markdown(CSS_MOBILE, unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -344,64 +365,64 @@ html, body,
 [data-testid="stAppViewContainer"] > div:first-child,
 [data-testid="stHeader"], [data-testid="stMain"],
 .main, .block-container {
-    background-color: #0d1117 !important; color: #c9d1d9 !important; color-scheme: dark !important;
+    background-color: var(--fond) !important; color: var(--texte) !important; 
 }
-[data-testid="stSidebar"] { background-color: #161b22 !important; border-right: 2px solid #ff6b00 !important; }
-[data-testid="stSidebar"] * { font-family: 'Rajdhani', sans-serif !important; color: #8b949e !important; }
+[data-testid="stSidebar"] { background-color: var(--surface) !important; border-right: 2px solid var(--accent) !important; }
+[data-testid="stSidebar"] * { font-family: 'Rajdhani', sans-serif !important; color: var(--texteFaible) !important; }
 [data-testid="stSidebar"] .stRadio label {
     font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important;
-    text-transform: uppercase !important; color: #8b949e !important; padding: 10px 4px !important;
+    text-transform: uppercase !important; color: var(--texteFaible) !important; padding: 10px 4px !important;
     transition: color 0.15s !important;
 }
-[data-testid="stSidebar"] .stRadio label:hover { color: #ff6b00 !important; }
+[data-testid="stSidebar"] .stRadio label:hover { color: var(--accent) !important; }
 *, p, div, span, li, .stMarkdown p, [data-testid="stMarkdownContainer"] p {
-    font-family: 'Inter', sans-serif !important; color: #c9d1d9 !important;
+    font-family: 'Inter', sans-serif !important; color: var(--texte) !important;
     font-size: 13px !important; line-height: 1.6 !important; letter-spacing: 0.2px !important;
 }
 h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    font-family: 'Rajdhani', sans-serif !important; color: #ff6b00 !important;
+    font-family: 'Rajdhani', sans-serif !important; color: var(--accent) !important;
     font-weight: 700 !important; letter-spacing: 2px !important; text-transform: uppercase !important;
 }
 .masthead-eyebrow {
     font-family: 'Rajdhani', sans-serif !important; font-size: 1.15rem !important;
-    font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 5px !important;
+    font-weight: 700 !important; color: var(--accent) !important; letter-spacing: 5px !important;
     text-transform: uppercase !important; margin: 0 0 6px 0 !important;
     text-shadow: 0 0 30px rgba(255,107,0,0.3) !important;
 }
-.masthead-accent { width: 60px; height: 2px; background: linear-gradient(90deg, #ff6b00, transparent); margin: 0 0 12px 0; border-radius: 2px; }
+.masthead-accent { width: 60px; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); margin: 0 0 12px 0; border-radius: 2px; }
 .header-banner {
-    background: linear-gradient(90deg, #161b22 0%, #1c2333 50%, #161b22 100%);
-    border: 1px solid #ff6b00; border-radius: 4px; padding: 18px 28px; margin-bottom: 24px;
+    background: linear-gradient(90deg, var(--surface) 0%, var(--surface2) 50%, var(--surface) 100%);
+    border: 1px solid var(--accent); border-radius: 4px; padding: 18px 28px; margin-bottom: 24px;
     display: flex; align-items: center; justify-content: space-between;
 }
 .header-left { display: flex; flex-direction: column; gap: 6px; }
 .header-title {
     font-family: 'Rajdhani', sans-serif !important; font-size: 1.9rem !important;
-    font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 7px !important;
+    font-weight: 700 !important; color: var(--accent) !important; letter-spacing: 7px !important;
     text-transform: uppercase !important; margin: 0 !important; line-height: 1 !important;
 }
 .header-page-active {
     font-family: 'Rajdhani', sans-serif !important; font-size: 0.95rem !important;
-    font-weight: 700 !important; color: #c9d1d9 !important; letter-spacing: 4px !important;
+    font-weight: 700 !important; color: var(--texte) !important; letter-spacing: 4px !important;
     text-transform: uppercase !important; margin: 0 !important; padding-left: 10px !important;
-    border-left: 3px solid #ff6b00 !important; display: block !important;
+    border-left: 3px solid var(--accent) !important; display: block !important;
 }
 .header-date {
     font-family: 'Inter', sans-serif !important; font-size: 0.8rem !important;
-    color: #8b949e !important; text-align: right; line-height: 1.9;
+    color: var(--texteFaible) !important; text-align: right; line-height: 1.9;
 }
-.divline { height: 1px; background: linear-gradient(90deg, transparent, #ff6b0066, transparent); margin: 0 0 20px 0; border: none; }
-.page-header-bar { background: #161b22; border: 1px solid #30363d; border-left: 3px solid #ff6b00; border-radius: 4px; padding: 14px 20px; margin-bottom: 20px; }
-.page-title { font-family: 'Rajdhani', sans-serif !important; font-size: 1.1rem !important; font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin: 0 0 4px 0 !important; }
-.page-subtitle { font-family: 'Inter', sans-serif !important; font-size: 0.72rem !important; color: #8b949e !important; margin: 0 !important; letter-spacing: 0.3px !important; }
-.section-title { font-family: 'Rajdhani', sans-serif !important; font-size: 0.72rem !important; font-weight: 700 !important; color: #ff6b00 !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #30363d; }
-[data-testid="stMetric"] { background: #161b22 !important; border: 1px solid #30363d !important; border-top: 3px solid #ff6b00 !important; border-radius: 4px !important; padding: 14px 16px !important; }
-[data-testid="stMetricValue"] { font-family: 'Rajdhani', sans-serif !important; color: #ff6b00 !important; font-size: 1.6rem !important; font-weight: 700 !important; }
-[data-testid="stMetricLabel"] { font-family: 'Inter', sans-serif !important; color: #8b949e !important; font-size: 0.62rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
-.stButton > button { background: transparent !important; border: 1px solid #ff6b00 !important; color: #ff6b00 !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; font-size: 13px !important; letter-spacing: 2px !important; text-transform: uppercase !important; border-radius: 2px !important; padding: 8px 22px !important; transition: all 0.15s ease !important; }
-.stButton > button:hover { background: #ff6b00 !important; color: #0d1117 !important; }
-.stDownloadButton > button { background: transparent !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Rajdhani', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; border-radius: 2px !important; width: 100% !important; transition: all 0.15s ease !important; }
-.stDownloadButton > button:hover { border-color: #ff6b00 !important; color: #ff6b00 !important; }
+.divline { height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 40%, transparent), transparent); margin: 0 0 20px 0; border: none; }
+.page-header-bar { background: var(--surface); border: 1px solid var(--bordure); border-left: 3px solid var(--accent); border-radius: 4px; padding: 14px 20px; margin-bottom: 20px; }
+.page-title { font-family: 'Rajdhani', sans-serif !important; font-size: 1.1rem !important; font-weight: 700 !important; color: var(--accent) !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin: 0 0 4px 0 !important; }
+.page-subtitle { font-family: 'Inter', sans-serif !important; font-size: 0.72rem !important; color: var(--texteFaible) !important; margin: 0 !important; letter-spacing: 0.3px !important; }
+.section-title { font-family: 'Rajdhani', sans-serif !important; font-size: 0.72rem !important; font-weight: 700 !important; color: var(--accent) !important; letter-spacing: 3px !important; text-transform: uppercase !important; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--bordure); }
+[data-testid="stMetric"] { background: var(--surface) !important; border: 1px solid var(--bordure) !important; border-top: 3px solid var(--accent) !important; border-radius: 4px !important; padding: 14px 16px !important; }
+[data-testid="stMetricValue"] { font-family: 'Rajdhani', sans-serif !important; color: var(--accent) !important; font-size: 1.6rem !important; font-weight: 700 !important; }
+[data-testid="stMetricLabel"] { font-family: 'Inter', sans-serif !important; color: var(--texteFaible) !important; font-size: 0.62rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; }
+.stButton > button { background: transparent !important; border: 1px solid var(--accent) !important; color: var(--accent) !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; font-size: 13px !important; letter-spacing: 2px !important; text-transform: uppercase !important; border-radius: 2px !important; padding: 8px 22px !important; transition: all 0.15s ease !important; }
+.stButton > button:hover { background: var(--accent) !important; color: var(--fond) !important; }
+.stDownloadButton > button { background: transparent !important; border: 1px solid var(--bordure) !important; color: var(--texte) !important; font-family: 'Rajdhani', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; letter-spacing: 1.5px !important; text-transform: uppercase !important; border-radius: 2px !important; width: 100% !important; transition: all 0.15s ease !important; }
+.stDownloadButton > button:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
 .stNumberInput > div > div > input,
 .stTextInput > div > div > input,
 [data-testid="stDateInputField"],
@@ -409,13 +430,13 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 [data-baseweb="base-input"] input,
 textarea,
 input {
-    background-color: #0d1117 !important;
-    border: 1px solid #30363d !important;
-    color: #f3f4f6 !important;
+    background-color: var(--fond) !important;
+    border: 1px solid var(--bordure) !important;
+    color: var(--texteFort) !important;
     font-family: 'Inter', sans-serif !important;
     font-size: 13px !important;
     border-radius: 2px !important;
-    caret-color: #f3f4f6 !important;
+    caret-color: var(--texteFort) !important;
 }
 .stNumberInput > div > div > input:focus,
 .stTextInput > div > div > input:focus,
@@ -424,20 +445,20 @@ input {
 [data-baseweb="base-input"] input:focus,
 textarea:focus,
 input:focus {
-    border-color: #ff6b00 !important; box-shadow: 0 0 0 1px #ff6b0044 !important;
+    border-color: var(--accent) !important; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent) !important;
 }
 [data-testid="stSelectbox"] > div > div,
 [data-baseweb="select"] > div,
 [data-baseweb="popover"] [role="listbox"],
 [data-baseweb="select"] *,
 .stMultiSelect div[data-baseweb="select"] {
-    background: #161b22 !important; border: 1px solid #30363d !important; color: #c9d1d9 !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important;
+    background: var(--surface) !important; border: 1px solid var(--bordure) !important; color: var(--texte) !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important;
 }
-[data-testid="stSelectbox"] label { color: #c9d1d9 !important; }
+[data-testid="stSelectbox"] label { color: var(--texte) !important; }
 [data-testid="stPills"] button {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--bordure) !important;
+    color: var(--texte) !important;
     border-radius: 999px !important;
     font-family: 'Rajdhani', sans-serif !important;
     font-size: 12px !important;
@@ -445,13 +466,13 @@ input:focus {
     min-height: 34px !important;
 }
 [data-testid="stPills"] button[aria-pressed="true"] {
-    background: #ff6b001a !important;
-    border-color: #ff6b00 !important;
-    color: #ff6b00 !important;
+    background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
 }
 [data-testid="stPills"] button:hover {
-    border-color: #ff6b00 !important;
-    color: #ff6b00 !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
 }
 [data-baseweb="select"] {
     min-height: 46px !important;
@@ -467,63 +488,63 @@ input:focus {
 }
 [data-baseweb="select"] span,
 [data-baseweb="select"] div {
-    color: #f3f4f6 !important;
+    color: var(--texteFort) !important;
     line-height: 1.35 !important;
 }
 [data-baseweb="select"] input {
-    color: #f3f4f6 !important;
+    color: var(--texteFort) !important;
 }
 [data-baseweb="menu"] li,
 [role="option"] {
-    background: #161b22 !important;
-    color: #f3f4f6 !important;
+    background: var(--surface) !important;
+    color: var(--texteFort) !important;
     min-height: 38px !important;
     display: flex !important;
     align-items: center !important;
 }
 [role="option"][aria-selected="true"] {
-    background: #222b36 !important;
+    background: var(--surface2) !important;
 }
-[data-baseweb="tag"] { background: #0d1117 !important; color: #f3f4f6 !important; border: 1px solid #30363d !important; }
+[data-baseweb="tag"] { background: var(--fond) !important; color: var(--texteFort) !important; border: 1px solid var(--bordure) !important; }
 [data-baseweb="select"] svg,
 [data-testid="stDateInputField"] svg,
-[data-baseweb="input"] svg { fill: #f3f4f6 !important; color: #f3f4f6 !important; }
+[data-baseweb="input"] svg { fill: var(--texteFort) !important; color: var(--texteFort) !important; }
 [data-testid="stFileUploader"] {
-    background: #161b22 !important;
-    border: 1px dashed #30363d !important;
+    background: var(--surface) !important;
+    border: 1px dashed var(--bordure) !important;
     border-radius: 4px !important;
-    color: #f3f4f6 !important;
+    color: var(--texteFort) !important;
 }
-[data-testid="stFileUploader"]:hover { border-color: #ff6b00 !important; }
-[data-testid="stFileUploader"] * { color: #f3f4f6 !important; }
+[data-testid="stFileUploader"]:hover { border-color: var(--accent) !important; }
+[data-testid="stFileUploader"] * { color: var(--texteFort) !important; }
 [data-testid="stFileUploaderDropzone"] {
-    background: #0d1117 !important;
-    border: 1px dashed #30363d !important;
+    background: var(--fond) !important;
+    border: 1px dashed var(--bordure) !important;
 }
 [data-testid="stFileUploaderDropzone"] section {
-    background: #0d1117 !important;
-    color: #f3f4f6 !important;
+    background: var(--fond) !important;
+    color: var(--texteFort) !important;
 }
 [data-testid="stFileUploaderDropzone"] button {
-    background: #161b22 !important;
-    color: #f3f4f6 !important;
-    border: 1px solid #30363d !important;
+    background: var(--surface) !important;
+    color: var(--texteFort) !important;
+    border: 1px solid var(--bordure) !important;
 }
 [data-testid="stFileUploaderDropzoneInstructions"] span,
 [data-testid="stFileUploaderDropzoneInstructions"] small,
 [data-testid="stFileUploaderFileName"] {
-    color: #f3f4f6 !important;
+    color: var(--texteFort) !important;
 }
 [data-testid="stFileUploader"] svg,
-[data-testid="stFileUploaderDropzone"] svg { fill: #f3f4f6 !important; color: #f3f4f6 !important; }
-.stTabs [data-baseweb="tab-list"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 2px !important; padding: 4px !important; gap: 2px !important; }
-.stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 2px !important; color: #8b949e !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 600 !important; font-size: 12px !important; letter-spacing: 2px !important; text-transform: uppercase !important; padding: 7px 16px !important; border: 1px solid transparent !important; transition: all 0.15s !important; }
-.stTabs [aria-selected="true"] { background: #ff6b0012 !important; color: #ff6b00 !important; border-color: #ff6b00 !important; }
-.stTabs [data-baseweb="tab-panel"] { background: #161b22 !important; border: 1px solid #30363d !important; border-top: none !important; border-radius: 0 0 4px 4px !important; padding: 20px !important; }
-[data-testid="stDataFrame"] { border: 1px solid #30363d !important; border-radius: 4px !important; overflow: hidden !important; background: #161b22 !important; }
-[data-testid="stForm"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 4px !important; padding: 18px !important; }
-[data-testid="stExpander"] { background: #161b22 !important; border: 1px solid #30363d !important; border-radius: 4px !important; }
-[data-testid="stExpander"] * { color: #c9d1d9 !important; }
+[data-testid="stFileUploaderDropzone"] svg { fill: var(--texteFort) !important; color: var(--texteFort) !important; }
+.stTabs [data-baseweb="tab-list"] { background: var(--surface) !important; border: 1px solid var(--bordure) !important; border-radius: 2px !important; padding: 4px !important; gap: 2px !important; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; border-radius: 2px !important; color: var(--texteFaible) !important; font-family: 'Rajdhani', sans-serif !important; font-weight: 600 !important; font-size: 12px !important; letter-spacing: 2px !important; text-transform: uppercase !important; padding: 7px 16px !important; border: 1px solid transparent !important; transition: all 0.15s !important; }
+.stTabs [aria-selected="true"] { background: color-mix(in srgb, var(--accent) 7%, transparent) !important; color: var(--accent) !important; border-color: var(--accent) !important; }
+.stTabs [data-baseweb="tab-panel"] { background: var(--surface) !important; border: 1px solid var(--bordure) !important; border-top: none !important; border-radius: 0 0 4px 4px !important; padding: 20px !important; }
+[data-testid="stDataFrame"] { border: 1px solid var(--bordure) !important; border-radius: 4px !important; overflow: hidden !important; background: var(--surface) !important; }
+[data-testid="stForm"] { background: var(--surface) !important; border: 1px solid var(--bordure) !important; border-radius: 4px !important; padding: 18px !important; }
+[data-testid="stExpander"] { background: var(--surface) !important; border: 1px solid var(--bordure) !important; border-radius: 4px !important; }
+[data-testid="stExpander"] * { color: var(--texte) !important; }
 [data-testid="stExpander"] details summary {
     min-height: 70px !important;
     display: flex !important;
@@ -539,41 +560,41 @@ input:focus {
     white-space: normal !important;
     font-size: 12px !important;
 }
-[data-testid="stAlert"] { background: #161b22 !important; border-radius: 2px !important; border-left-width: 3px !important; }
-[data-testid="stAlert"] p { color: #c9d1d9 !important; font-size: 12px !important; }
-.status-badge { background: #0f2a1a; border: 1px solid #238636; border-radius: 2px; padding: 5px 10px; font-family: 'Inter', sans-serif !important; font-size: 11px !important; color: #3fb950 !important; margin: 4px 0; display: block; letter-spacing: 0.5px; }
-.status-badge-teal { background: #0d1b2a; border: 1px solid #1f6feb; color: #58a6ff !important; }
-.dl-card { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 28px 20px 20px; text-align: center; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+[data-testid="stAlert"] { background: var(--surface) !important; border-radius: 2px !important; border-left-width: 3px !important; }
+[data-testid="stAlert"] p { color: var(--texte) !important; font-size: 12px !important; }
+.status-badge { background: var(--succesFond); border: 1px solid var(--succesBord); border-radius: 2px; padding: 5px 10px; font-family: 'Inter', sans-serif !important; font-size: 11px !important; color: var(--succes) !important; margin: 4px 0; display: block; letter-spacing: 0.5px; }
+.status-badge-teal { background: var(--infoFond); border: 1px solid var(--infoBord); color: var(--info) !important; }
+.dl-card { background: var(--surface); border: 1px solid var(--bordure); border-radius: 4px; padding: 28px 20px 20px; text-align: center; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .dl-icon { font-size: 26px; }
-.dl-label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 700 !important; color: #8b949e !important; letter-spacing: 2px; text-transform: uppercase; }
-label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 600 !important; color: #8b949e !important; letter-spacing: 1px !important; text-transform: uppercase !important; }
+.dl-label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 700 !important; color: var(--texteFaible) !important; letter-spacing: 2px; text-transform: uppercase; }
+label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !important; font-weight: 600 !important; color: var(--texteFaible) !important; letter-spacing: 1px !important; text-transform: uppercase !important; }
 [data-testid="stWidgetLabel"] p,
 [data-testid="stMarkdownContainer"] label,
 [data-testid="stFileUploaderDropzoneInstructions"] div,
 [data-testid="stTextInput"] label,
 [data-testid="stNumberInput"] label,
 [data-testid="stDateInput"] label {
-    color: #c9d1d9 !important;
+    color: var(--texte) !important;
 }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #0d1117; }
-::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #ff6b00; }
+::-webkit-scrollbar-track { background: var(--fond); }
+::-webkit-scrollbar-thumb { background: var(--bordure); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 :root {
-    --bg: #0b1014;
-    --panel: #111820;
-    --panel-2: #151f28;
-    --line: #27323d;
-    --line-soft: #1c2731;
-    --text: #e5edf3;
-    --muted: #9aa8b4;
-    --accent: #d87722;
+    --bg: var(--fond2);
+    --panel: var(--fond2);
+    --panel-2: var(--surface);
+    --line: var(--surface2);
+    --line-soft: var(--surface);
+    --text: var(--texteFort);
+    --muted: var(--texteFaible);
+    --accent: var(--accent3);
     --accent-soft: rgba(216, 119, 34, 0.14);
-    --ok: #2fa872;
-    --info: #4f8fcf;
-    --warn: #d6a536;
-    --danger: #d85b5b;
+    --ok: var(--succes);
+    --info: var(--info);
+    --warn: var(--alerte);
+    --danger: var(--danger);
 }
 
 html, body,
@@ -604,7 +625,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 }
 
 [data-testid="stSidebar"] {
-    background: #0f161d !important;
+    background: var(--fond2) !important;
     border-right: 1px solid var(--line) !important;
 }
 
@@ -633,7 +654,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 }
 
 .header-banner {
-    background: linear-gradient(135deg, #121b24 0%, #17232d 100%) !important;
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%) !important;
     border: 1px solid var(--line) !important;
     border-left: 4px solid var(--accent) !important;
     border-radius: 8px !important;
@@ -725,13 +746,13 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 .stButton > button {
     background: var(--accent) !important;
     border: 1px solid var(--accent) !important;
-    color: #101820 !important;
+    color: var(--fond2) !important;
 }
 
 .stButton > button:hover {
-    background: #ee8a32 !important;
-    border-color: #ee8a32 !important;
-    color: #101820 !important;
+    background: var(--accent2) !important;
+    border-color: var(--accent2) !important;
+    color: var(--fond2) !important;
     transform: translateY(-1px);
 }
 
@@ -753,7 +774,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 [data-baseweb="base-input"] input,
 textarea,
 input {
-    background: #0e151c !important;
+    background: var(--fond2) !important;
     border-color: var(--line) !important;
     border-radius: 6px !important;
     min-height: 40px !important;
@@ -799,7 +820,7 @@ input {
     background: rgba(47,168,114,0.12) !important;
     border-color: rgba(47,168,114,0.35) !important;
     border-radius: 999px !important;
-    color: #6fd39e !important;
+    color: var(--succes) !important;
     padding: 5px 11px !important;
     display: inline-block !important;
 }
@@ -807,7 +828,7 @@ input {
 .status-badge-teal {
     background: rgba(79,143,207,0.13) !important;
     border-color: rgba(79,143,207,0.35) !important;
-    color: #8fc1f2 !important;
+    color: var(--info) !important;
 }
 
 .dl-card {
@@ -830,7 +851,7 @@ input {
     max-width: 760px;
     margin: 8vh auto 28px;
     padding: 28px 30px;
-    background: linear-gradient(135deg, #121b24 0%, #17232d 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
     border: 1px solid var(--line);
     border-left: 4px solid var(--accent);
     border-radius: 8px;
@@ -869,8 +890,8 @@ label,
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #0b1014; }
-::-webkit-scrollbar-thumb { background: #34424f; border-radius: 999px; }
+::-webkit-scrollbar-track { background: var(--fond2); }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 @media (max-width: 800px) {
@@ -1134,15 +1155,17 @@ st.sidebar.markdown("""
    """ + icon_img("icon-streamlit.png", 18) + """ NAVIGATION
 </p>""", unsafe_allow_html=True)
 
+# "menu" reste en francais : c'est la cle interne qui aiguille les pages.
+# Seul "label", affiche dans la barre laterale, est traduit.
 NAV_ITEMS = [
-    {"key": "data", "label": "Données", "menu": "Données", "icon": "icon-data.png"},
-    {"key": "planning", "label": "Planning", "menu": "Planning", "icon": "icon-planning.png"},
-    {"key": "kpi", "label": "KPI", "menu": "KPI", "icon": "icon-kpi.png"},
-    {"key": "history", "label": "Historique", "menu": "Historique", "icon": "icon-history.png"},
-    {"key": "export", "label": "Export", "menu": "Export", "icon": "icon-export.png"},
+    {"key": "data", "label": t("nav_data"), "menu": "Données", "icon": "icon-data.png"},
+    {"key": "planning", "label": t("nav_planning"), "menu": "Planning", "icon": "icon-planning.png"},
+    {"key": "kpi", "label": t("nav_kpi"), "menu": "KPI", "icon": "icon-kpi.png"},
+    {"key": "history", "label": t("nav_history"), "menu": "Historique", "icon": "icon-history.png"},
+    {"key": "export", "label": t("nav_export"), "menu": "Export", "icon": "icon-export.png"},
 ]
 if st.session_state.get("user_role") == "admin":
-    NAV_ITEMS.append({"key": "analytics", "label": "Analytics", "menu": "Analytics", "icon": "icon-kpi.png"})
+    NAV_ITEMS.append({"key": "analytics", "label": t("nav_analytics"), "menu": "Analytics", "icon": "icon-kpi.png"})
 
 nav_keys = [item["key"] for item in NAV_ITEMS]
 if "main_nav" not in st.session_state or st.session_state["main_nav"] not in nav_keys:
@@ -1161,7 +1184,25 @@ for item in NAV_ITEMS:
 
 menu = next(item["menu"] for item in NAV_ITEMS if item["key"] == st.session_state["main_nav"])
 
-st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
+st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
+
+# ── Apparence et langue ───────────────────────────────────────────────────────
+col_theme, col_langue = st.sidebar.columns(2)
+with col_theme:
+    sombre = st.session_state["theme"] == "sombre"
+    if st.button(t("theme_clair") if sombre else t("theme_sombre"),
+                 key="bascule_theme", use_container_width=True,
+                 help=t("theme_aide")):
+        st.session_state["theme"] = "clair" if sombre else "sombre"
+        st.rerun()
+with col_langue:
+    if st.button("EN" if LANGUE == "fr" else "FR",
+                 key="bascule_langue", use_container_width=True,
+                 help=t("langue_aide")):
+        st.session_state["langue"] = "en" if LANGUE == "fr" else "fr"
+        st.rerun()
+
+st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
 
 # ── Statuts ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("<div style='margin-top:4px'>", unsafe_allow_html=True)
@@ -1184,7 +1225,7 @@ if "data_kpi" in st.session_state:
         unsafe_allow_html=True)
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
+st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
 
 # ── Clôture journée ────────────────────────────────────────────────────────────
 if "data" in st.session_state:
@@ -1216,7 +1257,7 @@ if "data" in st.session_state:
         except Exception as ex:
             st.sidebar.error(str(ex))
 
-st.sidebar.markdown("<hr style='border-color:#30363d;margin:16px 0'>", unsafe_allow_html=True)
+st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
 
 # ── Boutons réinitialiser et déconnecter (verticaux) ──────────────────────────
 if st.sidebar.button("RÉINITIALISER", key="reset_btn", use_container_width=True):
@@ -1290,11 +1331,90 @@ def piece_label(job_id: int) -> str:
 # PAGE 1 — UPLOAD
 # ══════════════════════════════════════════════════════════════════════════════
 if menu == "Données":
-    st.markdown("""
+    st.markdown(f"""
     <div class='page-header-bar'>
-        <p class='page-title'>DONNÉES DE PLANIFICATION</p>
-        <p class='page-subtitle'>Uploadez votre fichier Excel template et lancez l'optimisation.</p>
+        <p class='page-title'>{t("import_titre")}</p>
+        <p class='page-subtitle'>{t("import_sous")}</p>
     </div>""", unsafe_allow_html=True)
+
+    # Avertit sur écran étroit : masqué au-dessus de 820 px par la CSS.
+    st.markdown(BANNIERE_MOBILE, unsafe_allow_html=True)
+
+    # ── Écran d'accueil ────────────────────────────────────────────────────────
+    # Un visiteur qui découvre l'application arrivait jusqu'ici sur un champ
+    # d'import vide, sans savoir ce que fait l'outil ni par où commencer.
+    # Cet encart disparaît dès qu'un planning existe dans la session.
+    if st.session_state.get("data") is None:
+        st.markdown(f"""
+        <div class='accueil-bloc'>
+          <h2 class='accueil-titre'>{t("accueil_titre")}</h2>
+          <p class='accueil-intro'>{t("accueil_intro")}</p>
+          <div class='accueil-etapes'>
+            <div class='accueil-etape'>
+              <span class='accueil-etape-num'>{t("accueil_etape1_titre")}</span>
+              <span class='accueil-etape-txt'>{t("accueil_etape1_texte")}</span>
+            </div>
+            <div class='accueil-etape'>
+              <span class='accueil-etape-num'>{t("accueil_etape2_titre")}</span>
+              <span class='accueil-etape-txt'>{t("accueil_etape2_texte")}</span>
+            </div>
+            <div class='accueil-etape'>
+              <span class='accueil-etape-num'>{t("accueil_etape3_titre")}</span>
+              <span class='accueil-etape-txt'>{t("accueil_etape3_texte")}</span>
+            </div>
+          </div>
+        </div>
+        <style>
+        .accueil-bloc {{
+            background: var(--surface); border: 1px solid var(--bordure);
+            border-top: 3px solid var(--accent); border-radius: 4px;
+            padding: 22px 24px; margin-bottom: 18px;
+        }}
+        .accueil-titre {{
+            font-family: var(--police-titre) !important; color: var(--accent) !important;
+            font-size: 1.15rem !important; letter-spacing: 2px !important;
+            text-transform: uppercase !important; margin: 0 0 10px 0 !important;
+        }}
+        .accueil-intro {{
+            color: var(--texte) !important; font-size: 0.85rem !important;
+            line-height: 1.65 !important; margin: 0 0 18px 0 !important; max-width: 70ch;
+        }}
+        .accueil-etapes {{ display: flex; gap: 14px; flex-wrap: wrap; }}
+        .accueil-etape {{
+            flex: 1 1 200px; background: var(--fond2); border: 1px solid var(--bordure);
+            border-radius: 4px; padding: 12px 14px; display: flex;
+            flex-direction: column; gap: 6px;
+        }}
+        .accueil-etape-num {{
+            font-family: var(--police-titre) !important; color: var(--accent) !important;
+            font-size: 0.78rem !important; font-weight: 700 !important;
+            letter-spacing: 2px !important; text-transform: uppercase !important;
+        }}
+        .accueil-etape-txt {{
+            color: var(--texteFaible) !important; font-size: 0.76rem !important;
+            line-height: 1.5 !important;
+        }}
+        @media (max-width: 820px) {{
+            .accueil-bloc {{ padding: 16px 16px; }}
+            .accueil-etapes {{ flex-direction: column; }}
+        }}
+        </style>""", unsafe_allow_html=True)
+
+        # ── Démarrage en un clic ───────────────────────────────────────────────
+        # Sans ce bouton, il fallait créer un compte, télécharger le modèle, le
+        # remplir, l'importer, choisir un mode, puis calculer — six étapes avant
+        # de voir quoi que ce soit.
+        col_demo, col_texte = st.columns([1.3, 2.7])
+        with col_demo:
+            if st.button(t("accueil_essayer"), key="btn_demo",
+                         use_container_width=True, help=t("accueil_essayer_aide")):
+                st.session_state["charger_demo"] = True
+                st.rerun()
+        with col_texte:
+            st.markdown(
+                f"<p style='color:var(--texteFaible);font-size:0.76rem;"
+                f"margin-top:10px'>{t('accueil_ou')}</p>",
+                unsafe_allow_html=True)
 
     # Le parseur attend une structure precise — noms de feuilles avec emojis,
     # en-tetes sur des lignes determinees. Impossible a deviner : on fournit
@@ -1302,28 +1422,28 @@ if menu == "Données":
     col_upload, col_modele, col_btn = st.columns([3, 1.2, 1.2])
     with col_upload:
         excel_file = st.file_uploader(
-            "Fichier Excel (template_gantt.xlsx)",
+            t("import_champ"),
             type=["xlsx"], key="excel_solver",
-            help="Partez du modèle ci-contre. Les 4 feuilles doivent être complètes."
+            help=t("import_aide")
         )
     with col_modele:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         try:
             from backend.template_excel import construire_template
             st.download_button(
-                "TÉLÉCHARGER LE MODÈLE",
+                t("telecharger_modele"),
                 data=construire_template(),
                 file_name="template_gantt.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="dl_template",
-                help="Classeur prêt à remplir, avec un exemple de 3 pièces "
-                     "sur 4 machines et 2 techniciens.",
+                help=t("telecharger_modele_aide"),
             )
         except Exception as exc:
             st.caption(f"Modèle indisponible : {type(exc).__name__}")
     with col_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        run_solver = st.button("CALCULER LE PLANNING", key="run_solver_btn")
+        run_solver = st.button(t("calculer"), key="run_solver_btn",
+                               use_container_width=True)
 
     solve_profiles = {
         "Rapide": {"max_time_seconds": 20.0, "relative_gap_limit": 0.15},
@@ -1331,10 +1451,10 @@ if menu == "Données":
         "Approfondi": {"max_time_seconds": 180.0, "relative_gap_limit": 0.03},
     }
     solve_mode = st.selectbox(
-        "MODE DE RÉSOLUTION",
+        t("mode_resolution"),
         list(solve_profiles.keys()),
         index=0,
-        help="Rapide renvoie une bonne solution plus vite. Approfondi cherche plus longtemps."
+        help=t("mode_aide")
     )
 
     use_previous_planning = False
@@ -1396,13 +1516,20 @@ if menu == "Données":
                     unsafe_allow_html=True)
         st.dataframe(st.session_state["data"], use_container_width=True)
 
-    if run_solver:
+    # Le bouton « essayer avec un exemple » emprunte le même chemin que le
+    # bouton de calcul, en forçant simplement le jeu de démonstration.
+    mode_demo = st.session_state.pop("charger_demo", False)
+
+    if run_solver or mode_demo:
         from backend.solver.input_parser import (parse_excel_to_dict,
                                                   validate_excel_data,
                                                   DATA as DEFAULT_DATA)
         from backend.solver.model import solve_flexible_jobshop
 
-        if "excel_data_cache" in st.session_state:
+        if mode_demo:
+            solver_data = DEFAULT_DATA
+            st.info(t("accueil_essayer_aide"))
+        elif "excel_data_cache" in st.session_state:
             try:
                 solver_data = parse_excel_to_dict(
                     io.BytesIO(st.session_state["excel_data_cache"]))
@@ -1453,11 +1580,7 @@ if menu == "Données":
         # Sérialiser est donc meilleur pour tous que paralléliser.
         verrou = _verrou_solveur()
         if not verrou.acquire(blocking=False):
-            st.warning(
-                "Une optimisation est déjà en cours pour un autre visiteur. "
-                "L'hébergement gratuit ne dispose que de quelques cœurs : les "
-                "calculs sont traités un par un. Réessaie dans une minute."
-            )
+            st.warning(t("occupe"))
             st.stop()
 
         nb_workers = max(1, min(4, os.cpu_count() or 1))
