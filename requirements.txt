@@ -1,9 +1,13 @@
-streamlit==1.43.0
-pandas==2.2.3
-plotly==5.24.0
+# Versions alignées sur l'environnement de développement, mesurées le 13/09/2026.
+# Les versions épinglées auparavant (streamlit 1.43, plotly 5.24, ortools 9.8)
+# ne correspondaient plus à ce qui est réellement installé : l'application était
+# testée en local dans un environnement différent de celui que Streamlit Cloud
+# aurait construit au déploiement.
+streamlit==1.55.0
+pandas==2.2.2
+plotly==6.6.0
 openpyxl==3.1.5
-supabase==2.9.0
-pillow==11.1.0
+supabase==2.28.3
+pillow==12.1.1
 extra-streamlit-components==0.1.60
-ortools==9.8.3296
-extra-streamlit-components
+ortools==9.10.4067
