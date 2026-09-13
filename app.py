@@ -1946,13 +1946,11 @@ elif menu == "KPI":
             if not reference:
                 st.info(
                     "La comparaison apparaît après une optimisation lancée "
-                    "depuis la page Données : l'application y rejoue le même "
-                    "atelier avec les règles de priorité d'un ordonnancement "
-                    "manuel, pour mesurer l'écart.")
+                    "depuis la page Données.")
             else:
-                par_regle = reference.get("par_regle", {})
-                fin_fifo  = int(par_regle.get("FIFO", reference["meilleure"]))
-                fin_best  = int(reference["meilleure"])
+                par_regle  = reference.get("par_regle", {})
+                fin_fifo   = int(par_regle.get("FIFO", reference["meilleure"]))
+                fin_best   = int(reference["meilleure"])
                 regle_best = reference.get("regle", "")
 
                 gain_min = fin_fifo - fin_optimise
@@ -1968,81 +1966,121 @@ elif menu == "KPI":
                                 + params_cout["cout_indirect_h"])
                 economie = gain_min / 60 * cout_horaire
 
+                def nb(valeur, decimales=0):
+                    """Nombre a la francaise : espace fine, virgule decimale."""
+                    texte = f"{valeur:,.{decimales}f}"
+                    return texte.replace(",", "\u202f").replace(".", ",")
+
+                # ── La phrase d'abord ────────────────────────────────────
+                # Quatre chiffres alignes ne disent pas ce qu'ils comparent.
+                # On enonce donc le resultat en une phrase, avant de le
+                # detailler.
+                st.markdown(
+                    f"<p style='font-size:1.05rem;line-height:1.75;color:var(--texte);"
+                    f"margin:0 0 18px 0;max-width:62ch'>"
+                    f"Le planning calculé termine le lot en "
+                    f"<b style='color:var(--accent)'>{nb(fin_optimise)} minutes</b>. "
+                    f"En lançant les pièces dans leur ordre d'arrivée, comme le fait "
+                    f"un atelier sans outil d'ordonnancement, il aurait fallu "
+                    f"<b>{nb(fin_fifo)} minutes</b>.<br>"
+                    f"L'optimisation fait donc gagner "
+                    f"<b style='color:var(--succes)'>{nb(gain_min)} minutes, "
+                    f"soit {nb(gain_pct, 1)} %</b> du temps de production."
+                    f"</p>", unsafe_allow_html=True)
+
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("ORDONNANCEMENT MANUEL", f"{fin_fifo} min",
-                          help="Règle du premier arrivé, premier servi : les "
-                               "pièces sont lancées dans leur ordre d'arrivée, "
-                               "sur la première machine disponible.")
-                c2.metric("OPTIMISÉ", f"{fin_optimise} min")
-                c3.metric("TEMPS GAGNÉ", f"{gain_pct:.1f} %",
-                          delta=f"-{gain_min} min", delta_color="inverse")
-                c4.metric("CAPACITÉ LIBÉRÉE", f"{economie:,.0f} €".replace(",", " "),
+                c1.metric("SANS OPTIMISATION",  f"{nb(fin_fifo)} min")
+                c2.metric("AVEC L'APPLICATION", f"{nb(fin_optimise)} min")
+                c3.metric("TEMPS GAGNÉ",        f"{nb(gain_pct, 1)} %",
+                          delta=f"-{nb(gain_min)} min", delta_color="inverse")
+                c4.metric("VALEUR ESTIMÉE",     f"{nb(economie)} €",
                           help=f"Temps gagné converti au coût horaire d'atelier "
-                               f"saisi dans l'onglet Coûts ({cout_horaire:.0f} €/h : "
+                               f"saisi dans l'onglet Coûts ({nb(cout_horaire)} €/h : "
                                f"machine + main-d'œuvre + indirect). C'est une "
                                f"estimation de la capacité libérée, pas une "
                                f"économie encaissée.")
 
-                # ── Le detail, pour que rien ne soit cache ────────────────
-                st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+                # ── Le detail ────────────────────────────────────────────
+                st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<p style='color:var(--texteFaible);margin-bottom:4px'>"
+                    "Le même atelier, planifié de plusieurs façons. "
+                    "Plus la barre est courte, plus le lot est terminé tôt.</p>",
+                    unsafe_allow_html=True)
+
                 etiquettes, valeurs, couleurs = [], [], []
                 noms_regles = {
-                    "FIFO": "Manuel — premier arrivé (FIFO)",
-                    "SPT":  "Manuel — opération la plus courte (SPT)",
-                    "LPT":  "Manuel — opération la plus longue (LPT)",
-                    "MWKR": "Manuel — pièce la plus chargée (MWKR)",
+                    "FIFO": "Sans outil — dans l'ordre d'arrivée",
+                    "SPT":  "Sans outil — les plus courtes d'abord",
+                    "LPT":  "Sans outil — les plus longues d'abord",
+                    "MWKR": "Sans outil — pièces les plus chargées",
                 }
                 for cle, nom in noms_regles.items():
                     if cle in par_regle:
                         etiquettes.append(nom)
                         valeurs.append(int(par_regle[cle]))
                         couleurs.append(G_GRILLE)
-                etiquettes.append("Optimisé (CP-SAT)")
+                etiquettes.append("Avec l'application")
                 valeurs.append(fin_optimise)
                 couleurs.append(G_APLAT)
                 borne = infos_solveur.get("borne_inferieure")
                 if borne:
-                    etiquettes.append("Borne inférieure théorique")
+                    etiquettes.append("Impossible de faire mieux")
                     valeurs.append(int(borne))
                     couleurs.append(G_INFO)
 
                 fig_ref = go.Figure(go.Bar(
                     x=valeurs, y=etiquettes, orientation="h",
                     marker=dict(color=couleurs),
-                    text=[f"{v} min" for v in valeurs],
+                    text=[f"{nb(v)} min" for v in valeurs],
                     textposition="outside",
-                    textfont=dict(color=G_TEXTE, size=11, family="Inter"),
+                    textfont=dict(color=G_TEXTE, size=13, family="Inter"),
                     hovertemplate="%{y}<br>%{x} min<extra></extra>",
                 ))
                 fig_ref.update_layout(**chart_layout(
-                    height=60 + 38 * len(valeurs),
+                    height=70 + 44 * len(valeurs),
                     showlegend=False,
+                    font=dict(color=G_TEXTE, family="Inter", size=13),
                     xaxis=dict(title="Fin du lot (minutes)", gridcolor=G_GRILLE,
-                               color=G_FAIBLE,
-                               range=[0, max(valeurs) * 1.18]),
-                    yaxis=dict(autorange="reversed", color=G_TEXTE, gridcolor=G_GRILLE),
-                    margin=dict(l=10, r=10, t=10, b=40),
+                               color=G_FAIBLE, range=[0, max(valeurs) * 1.20]),
+                    yaxis=dict(autorange="reversed", color=G_TEXTE,
+                               gridcolor=G_GRILLE),
+                    margin=dict(l=10, r=10, t=6, b=44),
                 ))
                 st.plotly_chart(fig_ref, use_container_width=True)
 
-                phrase_borne = ""
-                if borne:
-                    ecart = infos_solveur.get("ecart_optimalite", 0.0) or 0.0
-                    phrase_borne = (
-                        f" La borne inférieure ({int(borne)} min) est le mur "
-                        f"théorique : aucun ordonnancement ne peut descendre "
-                        f"en dessous. La solution en est à {ecart:.1%}.")
+                # Le raisonnement complet reste accessible, sans encombrer.
+                with st.expander("D'où vient cette comparaison ?"):
+                    st.markdown(
+                        f"**Le problème.** Un planning qui finit en "
+                        f"{nb(fin_optimise)} minutes, c'est bien ou c'est "
+                        f"mauvais ? Le chiffre seul ne répond pas : il lui faut "
+                        f"un point de comparaison.\n\n"
+                        f"**La comparaison retenue.** Le même atelier, les mêmes "
+                        f"pièces, les mêmes machines sont replanifiés avec quatre "
+                        f"règles de priorité classiques — celles qu'applique un "
+                        f"chef d'atelier, ou un logiciel de suivi de production "
+                        f"sans module d'optimisation. Chacune remplit le planning "
+                        f"au fil de l'eau, et chacune respecte exactement les "
+                        f"mêmes contraintes que le solveur : gammes, changements "
+                        f"de série, disponibilité des techniciens.\n\n"
+                        f"**Le résultat.** Face à la pratique la plus répandue — "
+                        f"lancer les pièces dans leur ordre d'arrivée — "
+                        f"l'application fait gagner **{nb(gain_pct, 1)} %**. "
+                        f"Face à la meilleure des quatre règles "
+                        f"({nb(fin_best)} min), elle gagne encore "
+                        f"**{nb(gain_best_pct, 1)} %**. Les deux chiffres sont "
+                        f"donnés : ne montrer que le premier reviendrait à se "
+                        f"comparer au pire.\n\n"
+                        f"**La dernière barre** est la limite théorique : aucun "
+                        f"ordonnancement, quel qu'il soit, ne peut terminer plus "
+                        f"tôt. Elle dit ce qu'il reste à gagner — "
+                        f"{(infos_solveur.get('ecart_optimalite') or 0.0):.1%} ici.\n\n"
+                        f"Chaque planning de comparaison est relu par le même "
+                        f"vérificateur que les résultats du solveur avant "
+                        f"affichage : une référence irréalisable serait "
+                        f"artificiellement longue, et gonflerait le gain.")
 
-                st.caption(
-                    f"Le même atelier est rejoué avec quatre règles de priorité "
-                    f"classiques — celles qu'applique un chef d'atelier ou un MES. "
-                    f"Chacune produit un planning complet qui respecte exactement "
-                    f"les mêmes contraintes que le solveur. Face à la plus "
-                    f"répandue (premier arrivé, premier servi), l'optimisation "
-                    f"fait gagner **{gain_pct:.1f} %**. Face à la meilleure des "
-                    f"quatre ({regle_best}, {fin_best} min), elle gagne encore "
-                    f"**{gain_best_pct:.1f} %** — la comparaison n'est donc pas "
-                    f"faite contre un homme de paille.{phrase_borne}")
 
             # ── Indicateurs d'atelier ────────────────────────────────────
             st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
@@ -2054,10 +2092,18 @@ elif menu == "KPI":
             taux_retard    = round(jobs_en_retard / len(job_cycle) * 100, 1)
 
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("MAKESPAN",         f"{makespan} min")
-            c2.metric("TAUX UTILISATION", f"{taux_util_moyen} %")
-            c3.metric("CYCLE MOYEN",      f"{cycle_moyen} min")
-            c4.metric("TEMPS MORT",       f"{taux_idle} %")
+            c1.metric("DURÉE DU LOT",     f"{makespan} min",
+                      help="Du lancement de la première opération à la fin de "
+                           "la dernière.")
+            c2.metric("OCCUPATION",       f"{taux_util_moyen} %".replace(".", ","),
+                      help="Part du temps où les machines travaillent, "
+                           "rapportée à la durée du lot.")
+            c3.metric("CYCLE MOYEN",      f"{cycle_moyen} min".replace(".", ","),
+                      help="Temps moyen passé dans l'atelier par pièce, de sa "
+                           "première à sa dernière opération.")
+            c4.metric("TEMPS MORT",       f"{taux_idle} %".replace(".", ","),
+                      help="Part du temps où les machines sont disponibles mais "
+                           "n'ont rien à faire.")
 
             # Points d'attention : uniquement ce qu'un seuil franchi justifie.
             # Le « score sur 100 » qui figurait ici a été retiré : il mélangeait
