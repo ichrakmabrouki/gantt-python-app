@@ -195,6 +195,140 @@ pre, code, [data-testid="stCode"] {
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# RESEAU ANIME DE L'EN-TETE
+# ══════════════════════════════════════════════════════════════════════════════
+# Le bandeau de titre laisse une large zone vide a droite. Plutot qu'un aplat,
+# on y pose un reseau de noeuds relies — une image juste : un atelier est un
+# reseau de machines entre lesquelles circulent des pieces.
+#
+# Deux precautions :
+#
+#   - L'animation ne deplace PAS les noeuds. Des points qui bougent alors que
+#     les liens restent fixes donnent une figure disloquee. Ce qui bouge, ce
+#     sont des impulsions lumineuses qui parcourent les liens, plus un lent
+#     battement des noeuds : le reseau a l'air vivant sans se deformer.
+#   - Un degrade de masque efface le motif sous le titre. Le texte n'est donc
+#     jamais pose sur un fond charge.
+#
+# Le motif est un SVG servi en `background-image`. Un SVG appele ainsi ne peut
+# pas executer de script — ce que Streamlit interdirait de toute facon — mais
+# ses animations CSS, elles, fonctionnent. C'est aussi ce qui permet de
+# respecter le reglage systeme « reduire les animations », via une media query
+# ecrite a l'interieur du motif.
+
+import base64
+import math
+import random
+
+
+def _motif_reseau(largeur: int = 1200, hauteur: int = 220,
+                  noeuds: int = 26, graine: int = 7) -> str:
+    """SVG du reseau anime. Graine fixe : le motif ne change pas d'une
+    execution a l'autre."""
+    alea = random.Random(graine)
+
+    # Points repartis sur une grille bruitee : ni alignes, ni agglutines.
+    points, colonnes, rangees = [], 7, 4
+    for i in range(noeuds):
+        col, rang = i % colonnes, (i // colonnes) % rangees
+        x = (col + 0.5) * largeur / colonnes + alea.uniform(-46, 46)
+        y = (rang + 0.5) * hauteur / rangees + alea.uniform(-26, 26)
+        points.append((round(min(max(x, 12), largeur - 12), 1),
+                       round(min(max(y, 12), hauteur - 12), 1)))
+
+    # Liens courts uniquement : au-dela, le graphe devient une bouillie.
+    liens = []
+    for i, (x1, y1) in enumerate(points):
+        for j, (x2, y2) in enumerate(points[i + 1:], start=i + 1):
+            if math.dist((x1, y1), (x2, y2)) < 190:
+                liens.append((i, j))
+    alea.shuffle(liens)
+    liens = liens[:34]
+
+    traces_liens = "".join(
+        f'<line class="l l{n % 4}" x1="{points[i][0]}" y1="{points[i][1]}" '
+        f'x2="{points[j][0]}" y2="{points[j][1]}"/>'
+        for n, (i, j) in enumerate(liens)
+    )
+    traces_noeuds = "".join(
+        f'<circle class="n n{n % 5}" cx="{x}" cy="{y}" '
+        f'r="{2.1 + (n % 3) * 0.8:.1f}"/>'
+        for n, (x, y) in enumerate(points)
+    )
+
+    # Impulsions : quelques points qui parcourent un lien d'un bout a l'autre.
+    impulsions = ""
+    for k, (i, j) in enumerate(liens[:5]):
+        (x1, y1), (x2, y2) = points[i], points[j]
+        impulsions += (
+            f'<circle class="p" r="2.6" cx="0" cy="0" '
+            f'style="animation-delay:{k * 1.7:.1f}s;'
+            f'--x1:{x1}px;--y1:{y1}px;--x2:{x2}px;--y2:{y2}px"/>'
+        )
+
+    style = f"""
+    .l {{ stroke:{ORANGE}; stroke-width:1.1; stroke-opacity:.32;
+          stroke-dasharray:5 9; animation:file 7s linear infinite; }}
+    .l1 {{ animation-duration:9s; animation-delay:-2s; }}
+    .l2 {{ animation-duration:11s; animation-delay:-4s; }}
+    .l3 {{ animation-duration:8s;  animation-delay:-6s; }}
+    .n {{ fill:{ORANGE}; animation:battement 5s ease-in-out infinite; }}
+    .n1 {{ animation-delay:-1s; }} .n2 {{ animation-delay:-2s; }}
+    .n3 {{ animation-delay:-3s; }} .n4 {{ animation-delay:-4s; }}
+    .p {{ fill:{ORANGE_CLAIR}; animation:trajet 8.5s ease-in-out infinite; }}
+    @keyframes file      {{ to {{ stroke-dashoffset:-56; }} }}
+    @keyframes battement {{ 0%,100% {{ opacity:.38; }} 50% {{ opacity:1; }} }}
+    @keyframes trajet {{
+        0%       {{ transform:translate(var(--x1),var(--y1)); opacity:0; }}
+        12%      {{ opacity:.9; }}
+        45%,100% {{ transform:translate(var(--x2),var(--y2)); opacity:0; }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+        .l, .n, .p {{ animation: none; }}
+        .p {{ opacity: 0; }}
+        .n {{ opacity: .5; }}
+    }}
+    """
+
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {largeur} {hauteur}" '
+        f'width="{largeur}" height="{hauteur}" preserveAspectRatio="xMaxYMid slice">'
+        f'<style>{style}</style>'
+        f'<defs><linearGradient id="f" x1="0" x2="1">'
+        f'<stop offset="0" stop-color="#000"/>'
+        f'<stop offset=".38" stop-color="#000"/>'
+        f'<stop offset=".72" stop-color="#fff"/>'
+        f'<stop offset="1" stop-color="#fff"/></linearGradient>'
+        f'<mask id="m"><rect width="{largeur}" height="{hauteur}" fill="url(#f)"/></mask>'
+        f'</defs>'
+        f'<g mask="url(#m)">{traces_liens}{impulsions}{traces_noeuds}</g>'
+        f'</svg>'
+    )
+
+
+def css_reseau() -> str:
+    """Pose le reseau en fond du bandeau de titre et de l'ecran de connexion."""
+    motif = base64.b64encode(_motif_reseau().encode("utf-8")).decode("ascii")
+    return f"""<style>
+.header-banner, .login-hero {{
+    position: relative;
+    overflow: hidden;
+    background-image: url("data:image/svg+xml;base64,{motif}"), var(--verre) !important;
+    background-repeat: no-repeat, no-repeat;
+    background-position: right center, center;
+    background-size: auto 100%, cover;
+}}
+/* Le contenu passe devant le motif. */
+.header-banner > *, .login-hero > * {{ position: relative; z-index: 1; }}
+@media (max-width: 820px) {{
+    /* Sur telephone, le bandeau est etroit et le titre passe sur deux lignes :
+       le motif encombrerait au lieu d'habiller. */
+    .header-banner, .login-hero {{ background-image: var(--verre) !important; }}
+}}
+</style>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # HABILLAGE NEO-TACTILE
 # ══════════════════════════════════════════════════════════════════════════════
 # Injecte en dernier. Trois principes :
@@ -560,15 +694,18 @@ CSS_MOBILE = """<style>
       max-width: 100% !important;
   }
 
-  .header-title      { font-size: 1.25rem !important; letter-spacing: 3px !important; }
+  /* Les tailles restent genereuses : un telephone se tient plus pres de
+     l'oeil, mais un texte de 11 px n'y est pas plus lisible qu'ailleurs. */
+  .header-title      { font-size: 1.6rem !important; letter-spacing: 0.05em !important; }
   .header-banner     { flex-direction: column !important; align-items: flex-start !important;
-                       gap: 10px !important; padding: 14px 16px !important; }
+                       gap: 10px !important; padding: 16px 18px !important; }
   .header-date       { text-align: left !important; }
-  .masthead-eyebrow  { font-size: 0.95rem !important; letter-spacing: 3px !important; }
-  .page-title        { font-size: 1rem !important; letter-spacing: 2px !important; }
-  h1 { font-size: 1.4rem !important; }
-  h2 { font-size: 1.15rem !important; }
-  h3 { font-size: 1rem !important; }
+  .masthead-eyebrow  { font-size: 0.78rem !important; letter-spacing: 0.14em !important; }
+  .page-title        { font-size: 1.25rem !important; letter-spacing: 0.05em !important; }
+  .section-title     { font-size: 1rem !important; }
+  h1 { font-size: 1.5rem !important; }
+  h2 { font-size: 1.25rem !important; }
+  h3 { font-size: 1.1rem !important; }
 
   /* Zone tactile : 44 px, la valeur recommandee */
   .stButton > button,
@@ -577,10 +714,16 @@ CSS_MOBILE = """<style>
       min-height: 44px !important;
       padding: 10px 16px !important;
   }
-  [data-baseweb="input"] input,
-  [data-baseweb="select"] > div {
+  /* En dessous de 16 px, l'iPhone zoome automatiquement a chaque saisie et
+     la page se retrouve de travers. La regle vise donc large. */
+  [data-baseweb="input"], [data-baseweb="input"] input,
+  [data-baseweb="base-input"] input,
+  [data-testid="stNumberInput"] input,
+  [data-testid="stTextInput"] input,
+  [data-baseweb="select"] > div,
+  textarea, input, select {
       min-height: 44px !important;
-      font-size: 16px !important;   /* < 16px declenche le zoom auto sur iOS */
+      font-size: 16px !important;
   }
 
   [data-testid="stDataFrame"],
@@ -592,25 +735,40 @@ CSS_MOBILE = """<style>
   }
   .js-plotly-plot .plotly { min-width: 560px !important; }
 
-  [data-testid="stMetric"]      { padding: 12px 14px !important; }
-  [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+  [data-testid="stMetric"]      { padding: 10px 0 !important; }
+  [data-testid="stMetricValue"] { font-size: 1.65rem !important; }
+  [data-testid="stMetricLabel"] { min-height: 0 !important; }
+  /* Empilees, les mesures se separent par un filet horizontal, plus vertical. */
+  [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+      border-left: 0 !important;
+      padding-left: 0 !important;
+      border-top: 1px solid var(--verre-bord) !important;
+      padding-top: 12px !important;
+  }
 
   .stTabs [data-baseweb="tab-list"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
   .stTabs [data-baseweb="tab"]      { min-width: max-content !important; }
 
   [data-testid="stSidebar"] { min-width: 78vw !important; }
 
-  /* Le verre depoli coute cher en calcul sur telephone : on l'allege. */
-  [data-testid="stMetric"], [data-testid="stExpander"], [data-testid="stForm"],
+  /* Le verre depoli coute cher en calcul sur telephone : on l'allege.
+     Les mesures en sont exclues — elles n'ont plus de cadre nulle part, et
+     leur redonner un fond ici les aurait transformees en cartes. */
+  [data-testid="stExpander"], [data-testid="stForm"],
   .dl-card, .accueil-bloc, .header-banner {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
       background: var(--surface) !important;
   }
+  .header-banner { background-image: none !important; }
+  [data-testid="stMetric"] {
+      background: transparent !important;
+      border-radius: 0 !important;
+  }
 }
 
 @media (max-width: 480px) {
-  .header-title { font-size: 1.05rem !important; letter-spacing: 2px !important; }
+  .header-title { font-size: 1.35rem !important; letter-spacing: 0.04em !important; }
   .block-container { padding: 10px 10px 60px 10px !important; }
   .js-plotly-plot .plotly { min-width: 480px !important; }
 }
