@@ -1,0 +1,106 @@
+{
+  "budget_secondes": 60.0,
+  "version": "v2",
+  "cas": {
+    "01_08pieces_cte10": {
+      "operations": 18,
+      "variables": 199,
+      "statut": "resolu",
+      "secondes": 0.2,
+      "makespan": 246,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "02_12pieces_cte12": {
+      "operations": 37,
+      "variables": 556,
+      "statut": "resolu",
+      "secondes": 1.8,
+      "makespan": 400,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "03_20pieces_cte15": {
+      "operations": 57,
+      "variables": 856,
+      "statut": "resolu",
+      "secondes": 6.6,
+      "makespan": 558,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "04_25pieces_cte15": {
+      "operations": 90,
+      "variables": 1351,
+      "statut": "resolu",
+      "secondes": 4.5,
+      "makespan": 802,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "05_35pieces_cte18": {
+      "operations": 141,
+      "variables": 2116,
+      "statut": "resolu",
+      "secondes": 18.6,
+      "makespan": 1241,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "06_45pieces_cte20": {
+      "operations": 186,
+      "variables": 2791,
+      "statut": "resolu",
+      "secondes": 8.5,
+      "makespan": 1652,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "07_60pieces_cte22": {
+      "operations": 255,
+      "variables": 3826,
+      "statut": "resolu",
+      "secondes": 60.3,
+      "makespan": 1948,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "08_75pieces_cte25": {
+      "operations": 305,
+      "variables": 4576,
+      "statut": "resolu",
+      "secondes": 60.4,
+      "makespan": 2425,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "09_90pieces_cte28": {
+      "operations": 359,
+      "variables": 5386,
+      "statut": "resolu",
+      "secondes": 60.5,
+      "makespan": 2552,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    },
+    "10_100pieces_cte30": {
+      "operations": 395,
+      "variables": 5926,
+      "statut": "resolu",
+      "secondes": 60.8,
+      "makespan": 2667,
+      "valide": true,
+      "nb_violations": 0,
+      "violations": []
+    }
+  }
+}
