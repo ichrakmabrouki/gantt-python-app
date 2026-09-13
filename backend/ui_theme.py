@@ -119,17 +119,18 @@ CSS_CORRECTIF = """<style>
 [data-testid="stToolbar"] button,
 [data-testid="stMainMenu"] button { color: var(--texteFaible) !important; }
 
-/* Une icone ne decide jamais seule de sa couleur : elle suit son texte. */
+/* Les icones de Streamlit suivent la couleur de leur texte. On ne force NI
+   le remplissage NI le contour : le point d'interrogation des info-bulles,
+   dessine en creux, se remplissait alors entierement et devenait une pastille. */
 button svg, summary svg, label svg,
 [data-testid="stToolbar"] svg,
 [data-baseweb="select"] svg,
 [data-testid="stExpander"] svg,
 [data-testid="stNumberInputStepUp"] svg,
 [data-testid="stNumberInputStepDown"] svg {
-    fill: currentColor !important;
-    stroke: currentColor !important;
     color: inherit !important;
 }
+[data-testid="stTooltipHoverTarget"] svg { opacity: 0.55; }
 .stButton > button *,
 [data-testid="stFormSubmitButton"] > button *,
 .stDownloadButton > button * { color: inherit !important; }
@@ -222,16 +223,17 @@ CSS_NEO = """<style>
 }
 
 /* ── Panneaux ────────────────────────────────────────────────────────────── */
-[data-testid="stMetric"],
+/* Le cadre est reserve a ce qui delimite vraiment quelque chose : l'en-tete
+   de page, un formulaire, un bloc depliable, une carte de telechargement.
+   Une premiere version encadrait CHAQUE bloc de la page, chiffres compris :
+   l'oeil ne savait plus ou regarder, puisque tout avait le meme poids. */
 [data-testid="stExpander"],
 [data-testid="stForm"],
 [data-testid="stFileUploaderDropzone"],
 [data-testid="stFileUploader"] section,
-[data-testid="stAlert"],
 .dl-card,
 .accueil-bloc,
-.header-banner,
-.stTabs [data-baseweb="tab-panel"] > div > div {
+.header-banner {
     background: var(--verre) !important;
     border: 1px solid var(--verre-bord) !important;
     border-radius: var(--rayon) !important;
@@ -239,22 +241,38 @@ CSS_NEO = """<style>
     -webkit-backdrop-filter: blur(16px) saturate(130%);
     box-shadow: var(--relief), var(--verre-haut) !important;
 }
-[data-testid="stMetric"] { padding: 16px 18px !important; }
-[data-testid="stMetricValue"] { color: var(--texteFort) !important; font-weight: 700 !important; }
-[data-testid="stMetricLabel"] { color: var(--texteFaible) !important; }
 
-/* Un panneau change legerement de niveau au survol : c'est ce qui donne
-   l'impression de matiere. */
-[data-testid="stMetric"]:hover,
+/* Les chiffres ne sont pas dans des boites : ils sont poses sur la page, et
+   separes par un simple filet. C'est plus calme, et ils se lisent mieux. */
+[data-testid="stMetric"] {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 4px 20px 4px 0 !important;
+}
+[data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+    border-left: 1px solid var(--verre-bord) !important;
+    padding-left: 20px !important;
+}
+[data-testid="stHorizontalBlock"] > div:first-child [data-testid="stMetric"] {
+    border-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+/* Les messages : un filet a gauche, pas un cadre complet. */
+[data-testid="stAlert"] {
+    background: rgba(255,255,255,0.03) !important;
+    border: 0 !important;
+    border-left: 3px solid var(--accent) !important;
+    border-radius: 0 var(--rayon-petit) var(--rayon-petit) 0 !important;
+    box-shadow: none !important;
+}
+
+.dl-card { transition: all .18s ease; }
 .dl-card:hover {
     transform: translateY(-2px);
     border-color: rgba(255,122,26,0.28) !important;
-    transition: all .18s ease;
 }
-[data-testid="stMetric"], .dl-card { transition: all .18s ease; }
-
-/* Les messages gardent leur couleur de sens sur le bord gauche */
-[data-testid="stAlert"] { border-left: 3px solid var(--accent) !important; }
 
 /* ── Boutons ─────────────────────────────────────────────────────────────── */
 .stButton > button,
@@ -406,20 +424,105 @@ input:focus, textarea:focus {
 }
 
 /* ── Graphiques ──────────────────────────────────────────────────────────── */
+/* Plotly dessine deja son propre fond : un cadre par-dessus ferait double. */
 .stPlotlyChart, [data-testid="stPlotlyChart"] {
-    background: var(--verre);
-    border: 1px solid var(--verre-bord);
-    border-radius: var(--rayon);
-    padding: 8px;
-    box-shadow: var(--relief), var(--verre-haut);
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
 }
+.js-plotly-plot .plot-container { border-radius: var(--rayon); overflow: hidden; }
 
 /* ── Ecriture ────────────────────────────────────────────────────────────── */
+/* L'interface etait ecrite trop petit : titres de section a 11 px, libelles de
+   chiffres a 10 px, messages a 12 px, le tout en majuscules espacees de 3 px.
+   Les majuscules et l'interlettrage large font perdre a l'oeil les reperes de
+   forme des mots ; a cette taille, la lecture devient un effort. Tout est
+   remonte d'un cran, et l'interlettrage ramene a une valeur raisonnable. */
+
+html, body, [data-testid="stAppViewContainer"] { font-size: 16px !important; }
+
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stText"] {
+    font-size: 0.95rem !important;
+    line-height: 1.65 !important;
+    color: var(--texte) !important;
+}
+
+/* Titre de la fenetre */
+.header-title {
+    font-size: 2.1rem !important;
+    letter-spacing: 0.06em !important;
+    line-height: 1.15 !important;
+}
+.masthead-eyebrow { font-size: 0.82rem !important; letter-spacing: 0.18em !important; }
+.header-page-active { font-size: 1rem !important; letter-spacing: 0.06em !important; }
+.header-date { font-size: 0.82rem !important; }
+
+/* Titre de la page et de ses sections */
+.page-title {
+    font-size: 1.5rem !important;
+    letter-spacing: 0.06em !important;
+    color: var(--accent) !important;
+}
+.page-subtitle { font-size: 0.95rem !important; line-height: 1.6 !important; }
 .section-title {
     color: var(--texteFort) !important;
+    font-size: 1.05rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.02em !important;
+    letter-spacing: 0.05em !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 14px !important;
+    border-bottom: 1px solid var(--verre-bord) !important;
 }
+h1 { font-size: 1.85rem !important; }
+h2 { font-size: 1.45rem !important; }
+h3 { font-size: 1.15rem !important; }
+
+/* Chiffres */
+[data-testid="stMetricValue"] {
+    color: var(--texteFort) !important;
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+}
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] p {
+    color: var(--texteFaible) !important;
+    font-size: 0.8rem !important;
+    letter-spacing: 0.07em !important;
+    font-weight: 600 !important;
+}
+/* Hauteur reservee au libelle : sans elle, un libelle qui passe sur deux
+   lignes decale son chiffre vers le bas et la rangee n'est plus alignee. */
+[data-testid="stMetricLabel"] {
+    min-height: 2.6em !important;
+    align-items: flex-start !important;
+}
+[data-testid="stMetricDelta"] { font-size: 0.9rem !important; }
+
+/* Libelles de champs, boutons, onglets, messages */
+label, [data-testid="stWidgetLabel"] p {
+    font-size: 0.82rem !important;
+    letter-spacing: 0.05em !important;
+}
+.stButton > button, .stDownloadButton > button,
+[data-testid="stFormSubmitButton"] > button {
+    font-size: 0.85rem !important;
+    letter-spacing: 0.05em !important;
+}
+[data-testid="stSidebar"] .stButton > button { font-size: 0.9rem !important; }
+.stTabs [data-baseweb="tab"] { font-size: 0.85rem !important; letter-spacing: 0.05em !important; }
+[data-testid="stAlert"] p { font-size: 0.92rem !important; line-height: 1.6 !important; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+    font-size: 0.88rem !important;
+    line-height: 1.65 !important;
+    color: var(--texteFaible) !important;
+}
+.status-badge { font-size: 0.8rem !important; }
+.sidebar-section-title { font-size: 0.78rem !important; letter-spacing: 0.14em !important; }
+
 hr { border-color: var(--verre-bord) !important; }
 
 /* Mouvement retire pour qui l'a demande au niveau du systeme. */
