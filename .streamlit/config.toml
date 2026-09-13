@@ -1,0 +1,25 @@
+# Thème de base de Streamlit.
+#
+# Sans ce fichier, Streamlit suit le réglage clair/sombre du système du
+# visiteur. L'application avait donc deux thèmes superposés : le sien, piloté
+# par le bouton ☀/☾, et celui de Streamlit, piloté par Windows. Chez un
+# visiteur en mode sombre, passer l'application en clair laissait les éléments
+# habillés par Streamlit (menus, flèches, tableaux) sur fond sombre, tandis que
+# les textes et les icônes, eux, passaient au noir : illisible.
+#
+# On fixe donc la base en clair. La feuille de style de l'application, qui a
+# été écrite pour repeindre l'interface en sombre, prend le relais quand le
+# visiteur choisit le mode nuit.
+[theme]
+base                     = "light"
+primaryColor             = "#ff6b00"
+backgroundColor          = "#ffffff"
+secondaryBackgroundColor = "#f1f3f5"
+textColor                = "#111827"
+font                     = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
