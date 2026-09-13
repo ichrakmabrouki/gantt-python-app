@@ -111,6 +111,34 @@ def validate_excel_data(data: dict) -> tuple[bool, str]:
     if uncovered:
         return False, f"Machines sans technicien : {sorted(uncovered)}"
 
+    # ── Règle métier : un technicien par machine ──────────────────────────────
+    # Chaque technicien gère son propre parc de machines, et ces parcs ne se
+    # recoupent pas. Si une machine se retrouve rattachée à plusieurs
+    # techniciens, le modèle exige un changement de série de CHACUN d'eux sur
+    # CHAQUE opération de cette machine : le planning produit est alors
+    # beaucoup plus long que la réalité, sans que rien ne le signale.
+    # On refuse le fichier plutôt que de produire un planning faussement long.
+    techs_par_machine: dict[int, list[int]] = {}
+    for (tech, mch) in grp_mchs:
+        if mch in mchs_in_modes:
+            techs_par_machine.setdefault(mch, [])
+            if tech not in techs_par_machine[mch]:
+                techs_par_machine[mch].append(tech)
+
+    partagees = {m: sorted(ts) for m, ts in techs_par_machine.items() if len(ts) > 1}
+    if partagees:
+        detail = " ; ".join(
+            f"machine {m} → techniciens {', '.join(map(str, ts))}"
+            for m, ts in sorted(partagees.items())[:5]
+        )
+        suite = "" if len(partagees) <= 5 else f" (et {len(partagees) - 5} autre(s))"
+        return False, (
+            f"Feuille TECHNICIENS : {len(partagees)} machine(s) rattachée(s) à "
+            f"plusieurs techniciens — {detail}{suite}. Chaque machine doit "
+            f"n'avoir qu'un seul technicien ; un technicien peut en revanche "
+            f"gérer plusieurs machines."
+        )
+
     for (op, mch) in modes:
         if (op, mch) not in pt:
             return False, f"Durée manquante op={op} machine={mch}."
