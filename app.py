@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 import io
 import os
 import threading
 import uuid
-import base64
 from pathlib import Path
 from datetime import datetime, date, timedelta
 import extra_streamlit_components as stx
@@ -12,22 +12,46 @@ import extra_streamlit_components as stx
 
 APP_DIR = Path(__file__).resolve().parent
 ICON_DIR = APP_DIR / "assets" / "icons"
-SIDEBAR_ICON_DIR = ICON_DIR
 
+from backend.icons import icone
+from backend.ui_theme import PALETTE
 
-def icon_data_uri(filename: str) -> str:
-    try:
-        raw = (ICON_DIR / filename).read_bytes()
-        return "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
-    except Exception:
-        return ""
+# Les anciennes icones etaient 24 PNG de 800x800 pixels — environ 2 Mo charges
+# a chaque affichage, pour des pictogrammes de 18 pixels, et figes en orange.
+# Elles sont remplacees par un jeu vectoriel dessine dans le code (voir
+# backend/icons.py). Cette table conserve les anciens noms de fichiers pour
+# que les appels existants continuent de fonctionner.
+_ICONES = {
+    "icon-streamlit.png":   ("grille",      None),
+    "icon-data.png":        ("donnees",     None),
+    "icon-planning.png":    ("planning",    None),
+    "icon-kpi.png":         ("kpi",         None),
+    "icon-history.png":     ("historique",  None),
+    "icon-export.png":      ("export",      None),
+    "icon-user.png":        ("utilisateur", None),
+    "icon-check.png":       ("coche",       PALETTE["succes"]),
+    "icon-success.png":     ("coche",       PALETTE["succes"]),
+    "icon-hexagon.png":     ("hexagone",    None),
+    "icon-play.png":        ("lecture",     None),
+    "icon-arrow-right.png": ("fleche",      None),
+    "icon-search.png":      ("loupe",       None),
+    "icon-brain.png":       ("idee",        None),
+    "icon-document.png":    ("document",    None),
+    "icon-chart.png":       ("graphique",   None),
+    "icon-calendar.png":    ("calendrier",  None),
+    "icon-warning.png":     ("avertissement", PALETTE["alerte"]),
+    "icon-error.png":       ("croix",       PALETTE["danger"]),
+    "icon-green.png":       ("point",       PALETTE["succes"]),
+    "icon-blue.png":        ("point",       PALETTE["info"]),
+    "icon-orange.png":      ("point",       PALETTE["alerte"]),
+    "icon-red.png":         ("point",       PALETTE["danger"]),
+}
 
 
 def icon_img(filename: str, size: int = 18, class_name: str = "inline-icon") -> str:
-    return (
-        f"<img class='{class_name}' src='{icon_data_uri(filename)}' "
-        f"style='width:{size}px;height:{size}px;object-fit:contain;vertical-align:-4px;' alt='' />"
-    )
+    """Icone, appelee par son ancien nom de fichier PNG."""
+    nom, couleur = _ICONES.get(filename, ("point", None))
+    return icone(nom, size, couleur or PALETTE["accent"])
 
 
 from backend.converter      import convert_txt_to_df, load_jobs_from_txt
@@ -340,11 +364,9 @@ if st.session_state.get("authenticated") and st.session_state.get("user_role") =
 # Toute la feuille ci-dessous n'utilise plus que des var(--...). Changer de
 # mode revient donc à réécrire ce seul bloc :root.
 from backend.ui_theme import (
-    PALETTES, css_variables, css_correctif, CSS_MOBILE, BANNIERE_MOBILE,
+    PALETTE, css_variables, CSS_CORRECTIF, CSS_NEO, CSS_MOBILE, BANNIERE_MOBILE,
 )
 
-if "theme" not in st.session_state:
-    st.session_state["theme"] = "sombre"
 if "langue" not in st.session_state:
     st.session_state["langue"] = "fr"
 
@@ -356,23 +378,23 @@ def t(cle: str) -> str:
     """Raccourci de traduction, lie a la langue de la session."""
     return traduire(cle, LANGUE)
 
-st.markdown(css_variables(st.session_state["theme"]), unsafe_allow_html=True)
+st.markdown(css_variables(), unsafe_allow_html=True)
 st.markdown(CSS_MOBILE, unsafe_allow_html=True)
 
 # ── Couleurs disponibles côté Python ───────────────────────────────────────
 # Les graphiques Plotly ne lisent pas les variables CSS : ils reçoivent des
-# couleurs en dur. Elles étaient figées en sombre, ce qui donnait des blocs
-# noirs au milieu d'une page blanche, avec un texte gris clair illisible.
-# On sert donc la même palette que la feuille de style.
-PAL         = PALETTES[st.session_state["theme"]]
+# couleurs en dur. Elles étaient écrites à la main un peu partout, ce qui les
+# laissait dériver de la feuille de style. Elles viennent maintenant de la
+# palette, comme le reste.
+PAL         = PALETTE
 G_PAPIER    = PAL["surface"]       # fond de la zone graphique
 G_FOND      = PAL["fond"]          # fond du tracé
 G_TEXTE     = PAL["texte"]
 G_TEXTE_FORT = PAL["texteFort"]
 G_FAIBLE    = PAL["texteFaible"]
 G_GRILLE    = PAL["bordure"]
-G_ACCENT    = PAL["accent3"]   # orange assombri : lisible en texte sur blanc
-G_APLAT     = PAL["accent"]    # orange de marque : reserve aux surfaces pleines
+G_ACCENT    = PAL["accent"]
+G_APLAT     = PAL["accent"]
 G_SUCCES    = PAL["succes"]
 G_INFO      = PAL["info"]
 G_ALERTE    = PAL["alerte"]
@@ -408,7 +430,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
     font-family: 'Rajdhani', sans-serif !important; font-size: 1.15rem !important;
     font-weight: 700 !important; color: var(--accent) !important; letter-spacing: 5px !important;
     text-transform: uppercase !important; margin: 0 0 6px 0 !important;
-    text-shadow: 0 0 30px rgba(255,107,0,0.3) !important;
+    text-shadow: 0 0 30px rgba(255,122,26,0.3) !important;
 }
 .masthead-accent { width: 60px; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); margin: 0 0 12px 0; border-radius: 2px; }
 .header-banner {
@@ -611,7 +633,7 @@ label { font-family: 'Rajdhani', sans-serif !important; font-size: 12px !importa
     --text: var(--texteFort);
     --muted: var(--texteFaible);
     --accent: var(--accent3);
-    --accent-soft: rgba(216, 119, 34, 0.14);
+    --accent-soft: rgba(255,122,26, 0.14);
     --ok: var(--succes);
     --info: var(--info);
     --warn: var(--alerte);
@@ -827,7 +849,7 @@ input {
 
 .stTabs [aria-selected="true"] {
     background: var(--accent-soft) !important;
-    border-color: rgba(216,119,34,0.35) !important;
+    border-color: rgba(255,122,26,0.35) !important;
     color: var(--accent) !important;
 }
 
@@ -1014,7 +1036,7 @@ button[aria-label*="sidebar" i] svg {
     font-size: 11px !important;
     background: var(--panel-2) !important;
     color: var(--accent) !important;
-    border-color: rgba(216,119,34,0.35) !important;
+    border-color: rgba(255,122,26,0.35) !important;
 }
 
 [data-testid="stExpander"] details summary {
@@ -1072,8 +1094,8 @@ button[aria-label*="sidebar" i] svg {
 }
 
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(216,119,34,0.10) !important;
-    border-color: rgba(216,119,34,0.28) !important;
+    background: rgba(255,122,26,0.10) !important;
+    border-color: rgba(255,122,26,0.28) !important;
     color: var(--accent) !important;
     transform: none !important;
 }
@@ -1095,7 +1117,8 @@ button, input, textarea, label,
 # Injecte en dernier : il reprend les elements habilles par Streamlit lui-meme
 # (menus, info-bulles, tableaux, fleches des champs numeriques), que la feuille
 # ci-dessus ne touchait pas et qui restaient sombres en mode clair.
-st.markdown(css_correctif(st.session_state["theme"]), unsafe_allow_html=True)
+st.markdown(CSS_CORRECTIF, unsafe_allow_html=True)
+st.markdown(CSS_NEO, unsafe_allow_html=True)
 
 # ── Chargement depuis Supabase ─────────────────────────────────────────────────
 if SID and "data" not in st.session_state:
@@ -1215,12 +1238,19 @@ if "main_nav" not in st.session_state or st.session_state["main_nav"] not in nav
     st.session_state["main_nav"] = requested_nav if requested_nav in nav_keys else "data"
 
 for item in NAV_ITEMS:
-    icon_col, label_col = st.sidebar.columns([0.22, 0.78])
+    actif = item["key"] == st.session_state["main_nav"]
+    icon_col, label_col = st.sidebar.columns([0.2, 0.8])
     with icon_col:
-        st.image(str(SIDEBAR_ICON_DIR / item["icon"]), width=30)
+        # L'icone de la page courante prend l'orange, les autres restent en
+        # retrait : la page ou l'on se trouve se lit sans avoir a lire.
+        st.markdown(
+            f"<div style='padding-top:9px'>"
+            f"{icon_img(item['icon'], 20) if actif else icone(_ICONES[item['icon']][0], 20, PAL['texteFaible'])}"
+            f"</div>", unsafe_allow_html=True)
     with label_col:
-        prefix = "> " if item["key"] == st.session_state["main_nav"] else ""
-        if st.button(f"{prefix}{item['label']}", key=f"nav_{item['key']}", use_container_width=True):
+        if st.button(item["label"], key=f"nav_{item['key']}",
+                     use_container_width=True,
+                     type="primary" if actif else "secondary"):
             st.session_state["main_nav"] = item["key"]
             st.rerun()
 
@@ -1228,21 +1258,16 @@ menu = next(item["menu"] for item in NAV_ITEMS if item["key"] == st.session_stat
 
 st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
 
-# ── Apparence et langue ───────────────────────────────────────────────────────
-col_theme, col_langue = st.sidebar.columns(2)
-with col_theme:
-    sombre = st.session_state["theme"] == "sombre"
-    if st.button(t("theme_clair") if sombre else t("theme_sombre"),
-                 key="bascule_theme", use_container_width=True,
-                 help=t("theme_aide")):
-        st.session_state["theme"] = "clair" if sombre else "sombre"
-        st.rerun()
-with col_langue:
-    if st.button("EN" if LANGUE == "fr" else "FR",
-                 key="bascule_langue", use_container_width=True,
-                 help=t("langue_aide")):
-        st.session_state["langue"] = "en" if LANGUE == "fr" else "fr"
-        st.rerun()
+# ── Langue ────────────────────────────────────────────────────────────────────
+# La bascule clair / sombre a ete retiree : les tableaux de Streamlit sont
+# dessines dans un canvas qui suit le theme declare au demarrage du serveur et
+# qu'aucune feuille de style ne peut repeindre. Un theme unique, entierement
+# maitrise, vaut mieux qu'un mode clair aux tableaux restes noirs.
+if st.sidebar.button("EN" if LANGUE == "fr" else "FR",
+                     key="bascule_langue", use_container_width=True,
+                     help=t("langue_aide")):
+    st.session_state["langue"] = "en" if LANGUE == "fr" else "fr"
+    st.rerun()
 
 st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", unsafe_allow_html=True)
 
@@ -1271,12 +1296,11 @@ st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", un
 
 # ── Clôture journée ────────────────────────────────────────────────────────────
 if "data" in st.session_state:
-    planning_icon = icon_data_uri("icon-planning.png")
-    st.sidebar.markdown("""
-    <div class='sidebar-section-title'>
-        <img src='""" + planning_icon + """' alt='' />
-        <span>Planification multi-jours</span>
-    </div>""", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        "<div class='sidebar-section-title'>"
+        + icon_img("icon-planning.png", 20)
+        + "<span>Planification multi-jours</span></div>",
+        unsafe_allow_html=True)
     jour_cloture = st.sidebar.date_input("Date du planning", value=date.today(),
                                           key="jour_cloture_date")
     if st.sidebar.button("ARCHIVER LE JOUR", key="cloture_btn"):
@@ -1305,7 +1329,8 @@ st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", un
 if st.sidebar.button("RÉINITIALISER", key="reset_btn", use_container_width=True):
     clear_all(SID)
     for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
-                "kpi_params", "of_map", "piece_map", "df_profit_affiche"]:
+                "kpi_params", "of_map", "piece_map", "df_profit_affiche",
+                "reference", "infos_solveur", "solver_data"]:
         st.session_state.pop(key, None)
     st.rerun()
 
@@ -1694,6 +1719,32 @@ if menu == "Données":
                 st.session_state["data"] = df_result
                 save_operations(df_result, SID)
 
+                # ── Reference : ce que l'atelier aurait fait sans solveur ──
+                # Le makespan seul ne dit rien. On rejoue le meme atelier avec
+                # les regles de priorite d'un ordonnancement manuel, puis on
+                # verifie le planning obtenu avec le meme controleur que celui
+                # du solveur : une reference fausse fabriquerait un gain fictif.
+                st.session_state["solver_data"]   = solver_data
+                st.session_state["infos_solveur"] = {
+                    cle: infos.get(cle) for cle in
+                    ("makespan", "borne_inferieure", "ecart_optimalite",
+                     "statut", "secondes")
+                }
+                try:
+                    from backend.solver.baseline import ordonnancement_reference
+                    from verifier_planning import verifier_planning
+                    df_ref = ordonnancement_reference(solver_data)
+                    if df_ref.empty or verifier_planning(solver_data, df_ref):
+                        st.session_state.pop("reference", None)
+                    else:
+                        st.session_state["reference"] = {
+                            "par_regle": dict(df_ref.attrs.get("makespans_par_regle", {})),
+                            "meilleure": int(df_ref.attrs.get("makespan", 0)),
+                            "regle":     str(df_ref.attrs.get("regle", "")),
+                        }
+                except Exception:
+                    st.session_state.pop("reference", None)
+
                 rows_jobs    = [{"OperationID": g[0], "JobID": g[1]}
                                 for g in solver_data["gammes"]]
                 df_jobs_auto = pd.DataFrame(rows_jobs)
@@ -1871,65 +1922,188 @@ elif menu == "KPI":
         prix_saved = st.session_state.get("prix_db", {})
 
         tab1, tab2, tab3, tab4 = st.tabs([
-            "ORDONNANCEMENT", "COÛTS PAR OF", "PROFIT & MARGE", "VISUALISATION"
+            "PERFORMANCE", "COÛTS PAR OF", "PROFIT & MARGE", "VISUALISATION"
         ])
-
         with tab1:
-            due_date = int(df["EndTime"].max())
+            # ── Ce que l'optimisation rapporte ────────────────────────────
+            # Un makespan de 802 minutes ne dit rien tout seul : 802 par
+            # rapport a quoi ? Cet onglet repond a la seule question qui
+            # interesse un atelier — combien fait-on gagner, et par rapport
+            # a quoi. Deux references, deux questions differentes :
+            #   - les regles de priorite classiques : ce que l'atelier aurait
+            #     produit sans optimiseur, donc le gain reel ;
+            #   - la borne inferieure du solveur : ce qu'aucun ordonnancement
+            #     ne peut battre, donc la qualite de la solution.
+            due_date      = int(df["EndTime"].max())
+            fin_optimise  = int(df["EndTime"].max())
+            reference     = st.session_state.get("reference")
+            infos_solveur = st.session_state.get("infos_solveur", {})
+
+            st.markdown(
+                f"<p class='section-title'>{icon_img('icon-chart.png', 18)} "
+                f"Ce que l'optimisation rapporte</p>", unsafe_allow_html=True)
+
+            if not reference:
+                st.info(
+                    "La comparaison apparaît après une optimisation lancée "
+                    "depuis la page Données : l'application y rejoue le même "
+                    "atelier avec les règles de priorité d'un ordonnancement "
+                    "manuel, pour mesurer l'écart.")
+            else:
+                par_regle = reference.get("par_regle", {})
+                fin_fifo  = int(par_regle.get("FIFO", reference["meilleure"]))
+                fin_best  = int(reference["meilleure"])
+                regle_best = reference.get("regle", "")
+
+                gain_min = fin_fifo - fin_optimise
+                gain_pct = (gain_min / fin_fifo * 100) if fin_fifo else 0.0
+                gain_best_pct = ((fin_best - fin_optimise) / fin_best * 100
+                                 if fin_best else 0.0)
+
+                params_cout = st.session_state.get("kpi_params", {
+                    "cout_machine_h": 50.0, "cout_mo_h": 20.0,
+                    "cout_indirect_h": 10.0, "prix_matiere_unit": 5.0})
+                cout_horaire = (params_cout["cout_machine_h"]
+                                + params_cout["cout_mo_h"]
+                                + params_cout["cout_indirect_h"])
+                economie = gain_min / 60 * cout_horaire
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("ORDONNANCEMENT MANUEL", f"{fin_fifo} min",
+                          help="Règle du premier arrivé, premier servi : les "
+                               "pièces sont lancées dans leur ordre d'arrivée, "
+                               "sur la première machine disponible.")
+                c2.metric("OPTIMISÉ", f"{fin_optimise} min")
+                c3.metric("TEMPS GAGNÉ", f"{gain_pct:.1f} %",
+                          delta=f"-{gain_min} min", delta_color="inverse")
+                c4.metric("CAPACITÉ LIBÉRÉE", f"{economie:,.0f} €".replace(",", " "),
+                          help=f"Temps gagné converti au coût horaire d'atelier "
+                               f"saisi dans l'onglet Coûts ({cout_horaire:.0f} €/h : "
+                               f"machine + main-d'œuvre + indirect). C'est une "
+                               f"estimation de la capacité libérée, pas une "
+                               f"économie encaissée.")
+
+                # ── Le detail, pour que rien ne soit cache ────────────────
+                st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+                etiquettes, valeurs, couleurs = [], [], []
+                noms_regles = {
+                    "FIFO": "Manuel — premier arrivé (FIFO)",
+                    "SPT":  "Manuel — opération la plus courte (SPT)",
+                    "LPT":  "Manuel — opération la plus longue (LPT)",
+                    "MWKR": "Manuel — pièce la plus chargée (MWKR)",
+                }
+                for cle, nom in noms_regles.items():
+                    if cle in par_regle:
+                        etiquettes.append(nom)
+                        valeurs.append(int(par_regle[cle]))
+                        couleurs.append(G_GRILLE)
+                etiquettes.append("Optimisé (CP-SAT)")
+                valeurs.append(fin_optimise)
+                couleurs.append(G_APLAT)
+                borne = infos_solveur.get("borne_inferieure")
+                if borne:
+                    etiquettes.append("Borne inférieure théorique")
+                    valeurs.append(int(borne))
+                    couleurs.append(G_INFO)
+
+                fig_ref = go.Figure(go.Bar(
+                    x=valeurs, y=etiquettes, orientation="h",
+                    marker=dict(color=couleurs),
+                    text=[f"{v} min" for v in valeurs],
+                    textposition="outside",
+                    textfont=dict(color=G_TEXTE, size=11, family="Inter"),
+                    hovertemplate="%{y}<br>%{x} min<extra></extra>",
+                ))
+                fig_ref.update_layout(**chart_layout(
+                    height=60 + 38 * len(valeurs),
+                    showlegend=False,
+                    xaxis=dict(title="Fin du lot (minutes)", gridcolor=G_GRILLE,
+                               color=G_FAIBLE,
+                               range=[0, max(valeurs) * 1.18]),
+                    yaxis=dict(autorange="reversed", color=G_TEXTE, gridcolor=G_GRILLE),
+                    margin=dict(l=10, r=10, t=10, b=40),
+                ))
+                st.plotly_chart(fig_ref, use_container_width=True)
+
+                phrase_borne = ""
+                if borne:
+                    ecart = infos_solveur.get("ecart_optimalite", 0.0) or 0.0
+                    phrase_borne = (
+                        f" La borne inférieure ({int(borne)} min) est le mur "
+                        f"théorique : aucun ordonnancement ne peut descendre "
+                        f"en dessous. La solution en est à {ecart:.1%}.")
+
+                st.caption(
+                    f"Le même atelier est rejoué avec quatre règles de priorité "
+                    f"classiques — celles qu'applique un chef d'atelier ou un MES. "
+                    f"Chacune produit un planning complet qui respecte exactement "
+                    f"les mêmes contraintes que le solveur. Face à la plus "
+                    f"répandue (premier arrivé, premier servi), l'optimisation "
+                    f"fait gagner **{gain_pct:.1f} %**. Face à la meilleure des "
+                    f"quatre ({regle_best}, {fin_best} min), elle gagne encore "
+                    f"**{gain_best_pct:.1f} %** — la comparaison n'est donc pas "
+                    f"faite contre un homme de paille.{phrase_borne}")
+
+            # ── Indicateurs d'atelier ────────────────────────────────────
+            st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<p class='section-title'>{icon_img('icon-kpi.png', 18)} "
+                f"Indicateurs du planning</p>", unsafe_allow_html=True)
+
+            jobs_en_retard = (job_cycle["Fin"] > due_date).sum()
+            taux_retard    = round(jobs_en_retard / len(job_cycle) * 100, 1)
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("MAKESPAN",         f"{makespan} min")
+            c2.metric("TAUX UTILISATION", f"{taux_util_moyen} %")
+            c3.metric("CYCLE MOYEN",      f"{cycle_moyen} min")
+            c4.metric("TEMPS MORT",       f"{taux_idle} %")
+
+            # Points d'attention : uniquement ce qu'un seuil franchi justifie.
+            # Le « score sur 100 » qui figurait ici a été retiré : il mélangeait
+            # trois taux sans unité commune et ne se comparait à rien.
+            alertes = []
+            if taux_util_moyen < 60:
+                alertes.append("Machines sous-utilisées : la charge ne remplit "
+                               "pas la capacité installée.")
+            if taux_util_moyen > 85:
+                alertes.append("Machines proches de la saturation : tout aléa "
+                               "se répercutera sur la date de fin.")
+            if taux_idle > 30:
+                alertes.append("Temps mort élevé : regrouper les opérations par "
+                               "machine réduirait les changements de série.")
+            if alertes:
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                for texte in alertes:
+                    st.markdown(f"{icon_img('icon-arrow-right.png', 16)} {texte}",
+                                unsafe_allow_html=True)
+
+            st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("<p class='section-title'>Utilisation par machine</p>",
+                            unsafe_allow_html=True)
+                df_util = pd.DataFrame({
+                    "Machine":        machine_util.index,
+                    "Charge (min)":   machine_util.values,
+                    "Taux util. (%)": (machine_util.values / makespan * 100).round(1),
+                    "Idle (min)":     makespan - machine_util.values,
+                })
+                st.dataframe(df_util, use_container_width=True, hide_index=True)
+            with col_g2:
+                st.markdown("<p class='section-title'>Temps de cycle par pièce</p>",
+                            unsafe_allow_html=True)
+                jcd = job_cycle.reset_index()[["JobLabel", "Debut", "Fin", "CycleTime"]]
+                jcd.columns = ["Pièce", "Début", "Fin", "Cycle (min)"]
+                st.dataframe(jcd, use_container_width=True, hide_index=True)
+
+            st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
             col_p1, _ = st.columns([2, 5])
             with col_p1:
                 start_time_day = st.number_input(
                     "DÉBUT JOURNÉE (MIN DEPUIS 6H00)",
                     min_value=0, value=360, step=10, key="start_time_day")
-                st.caption(f"Heure affichee : {minutes_to_time(0, int(start_time_day))}")
-
-            st.info(f"Makespan du lot courant : **{makespan} min**")
-
-            jobs_en_retard = (job_cycle["Fin"] > due_date).sum()
-            taux_retard    = round(jobs_en_retard / len(job_cycle) * 100, 1)
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("MAKESPAN",         f"{makespan} min")
-            c2.metric("TAUX UTILISATION", f"{taux_util_moyen} %")
-            c3.metric("CYCLE MOYEN",      f"{cycle_moyen} min")
-            c4.metric("TAUX RETARD",      f"{taux_retard} %")
-            c5.metric("IDLE TIME",        f"{taux_idle} %")
-
-            st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-            st.markdown(f"<p class='section-title'>{icon_img('icon-search.png', 18)} Insights automatiques</p>", unsafe_allow_html=True)
-            if taux_util_moyen < 60: st.warning("Sous-utilisation globale des machines")
-            if taux_util_moyen > 85: st.error("Risque de saturation des machines")
-            if taux_retard > 20:     st.warning("Taux de retard élevé -> revoir ordonnancement")
-            if taux_idle > 30:       st.info("Opportunité d'optimisation des ressources")
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            st.markdown(f"<p class='section-title'>{icon_img('icon-brain.png', 18)} Recommandations</p>", unsafe_allow_html=True)
-            if taux_idle > 25:       st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Réduire le nombre de machines ou regrouper les tâches", unsafe_allow_html=True)
-            if taux_util_moyen < 50: st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Augmenter la charge ou revoir planification", unsafe_allow_html=True)
-            if jobs_en_retard > 0:   st.markdown(f"{icon_img('icon-arrow-right.png', 16)} Prioriser les pièces critiques ou ajuster séquencement", unsafe_allow_html=True)
-
-            score = max(0, min(100, round((taux_util_moyen - taux_idle - taux_retard), 1)))
-            st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-            st.markdown("<p class='section-title'>Performance globale</p>", unsafe_allow_html=True)
-            st.metric("SCORE", f"{score}/100")
-
-            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-            st.markdown("<p class='section-title'>Utilisation par machine</p>", unsafe_allow_html=True)
-            df_util = pd.DataFrame({
-                "Machine":        machine_util.index,
-                "Charge (min)":   machine_util.values,
-                "Taux util. (%)": (machine_util.values / makespan * 100).round(1),
-                "Idle (min)":     makespan - machine_util.values,
-            })
-            st.dataframe(df_util, use_container_width=True, hide_index=True)
-
-            st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-            st.markdown("<p class='section-title'>Temps de cycle par pièce</p>", unsafe_allow_html=True)
-            jcd = job_cycle.reset_index()[["JobLabel", "Debut", "Fin", "CycleTime"]]
-            jcd.columns = ["Pièce", "Début", "Fin", "Cycle (min)"]
-            jcd["En retard"] = jcd["Fin"].apply(lambda x: "OUI" if x > due_date else "NON")
-            st.dataframe(jcd, use_container_width=True, hide_index=True)
+                st.caption(f"Heure affichée : {minutes_to_time(0, int(start_time_day))}")
 
         with tab2:
             st.markdown("<p class='section-title'>Paramètres de coût</p>", unsafe_allow_html=True)
@@ -2086,8 +2260,6 @@ elif menu == "KPI":
                     st.success("Toutes les pièces sont rentables")
 
         with tab4:
-            import plotly.graph_objects as go
-
             st.markdown("<p class='section-title'>Visualisation des KPIs</p>", unsafe_allow_html=True)
 
             taux_par_machine = (machine_util.values / makespan * 100).round(1)
