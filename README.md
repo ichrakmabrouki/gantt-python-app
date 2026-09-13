@@ -97,6 +97,45 @@ the quality of the output.
 
 ---
 
+## Measuring the value, not just the makespan
+
+"802 minutes" is not a result. It is a number that needs something to be
+compared against. The app therefore reports two references next to every
+schedule it produces:
+
+**The lower bound.** CP-SAT knows a value no schedule can beat. The gap between
+the solution and that bound says how much room is left — 0 % means proven
+optimal. This answers *is the solution good?*
+
+**A manual schedule.** The same workshop is replayed with the priority rules a
+foreman — or a basic MES — actually applies: first-in-first-out, shortest
+processing time, longest processing time, most work remaining. Each rule builds
+a complete schedule by list scheduling, under **exactly the same constraints as
+the solver**. This answers *what is the optimiser worth?*
+
+On the 100-part instance:
+
+| | Finish time |
+|---|---|
+| Manual, first-in-first-out | 3 423 min |
+| Manual, longest processing time | 3 315 min |
+| Manual, most work remaining | 2 878 min |
+| Manual, shortest processing time | 2 840 min |
+| **CP-SAT** | **2 667 min** |
+
+Against the most common practice, that is **22 % less**; against the *best* of
+the four rules, still 6 %. Both figures are shown in the app, because comparing
+only against the worst rule would be a straw man. The time saved is converted
+into freed capacity in euros using the hourly cost already entered in the Costs
+tab — labelled as an estimate, not as cash collected.
+
+The baseline is not trusted blindly either: every reference schedule is passed
+through the same independent verifier as the solver's output before any
+percentage is displayed. An invalid reference would be artificially long, and
+would manufacture a gain out of nothing.
+
+---
+
 ## How correctness is guaranteed
 
 A solver can return a provably optimal solution to the wrong model. So
@@ -124,6 +163,8 @@ Evidence:
 - **235 generated instances** — random parameters plus edge cases (`cte = 0`,
   single machine, single technician, no machine flexibility): 235/235 valid.
   Each instance is reproducible from its seed.
+- **972 reference schedules** — the four priority rules across six instance
+  families and the repository's Excel files: 972/972 valid.
 - **Every real solve in the app** is verified before the Gantt is displayed. If
   a constraint is violated, the app shows the violation instead of a wrong chart.
 
@@ -164,6 +205,7 @@ python run_all_tests.py          # full suite: environment, database, solver, se
 python test_fichiers_excel.py    # the 20 Excel files, constraint by constraint
 python stress_test_solveur.py    # 255 instances, edge cases and random
 python benchmark_v2.py           # solver benchmark with optimality gap
+python test_reference.py         # 972 baseline schedules, constraint by constraint
 python verifier_planning.py <file.xlsx>
 ```
 
@@ -176,10 +218,14 @@ backend/
     input_parser.py            Excel → solver structures, business validation
     model.py                   CP-SAT model (v2, native formulation)
     model_v1.py                original MILP-style model, kept for comparison
+    baseline.py                priority-rule schedules used as the reference
   database.py                  Supabase, PBKDF2 passwords, signed session tokens
   gantt_builder.py             Plotly Gantt chart
   kpi_calculator.py            load, profit and margin
   template_excel.py            downloadable input template
+  ui_theme.py                  palette, glass styling, mobile layout
+  icons.py                     vector icon set drawn in code
+  i18n.py                      French / English interface strings
 verifier_planning.py           independent constraint checker
 ```
 
