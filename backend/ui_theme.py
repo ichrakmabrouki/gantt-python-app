@@ -195,98 +195,150 @@ pre, code, [data-testid="stCode"] {
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# RESEAU ANIME DE L'EN-TETE
 # ══════════════════════════════════════════════════════════════════════════════
-# Le bandeau de titre laisse une large zone vide a droite. Plutot qu'un aplat,
-# on y pose un reseau de noeuds relies — une image juste : un atelier est un
-# reseau de machines entre lesquelles circulent des pieces.
+# RESEAU ANIME DU HAUT DE PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+# La bande qui surmonte le titre etait vide. On y pose un reseau de noeuds
+# relies — une image juste : un atelier est un reseau de machines entre
+# lesquelles circulent des pieces.
 #
-# Deux precautions :
+# Le motif est construit en DEUX COUCHES qui derivent a des vitesses et dans
+# des sens differents. C'est ce qui donne le mouvement sans disloquer la
+# figure : chaque couche se deplace d'un bloc, noeuds et liens ensemble, donc
+# aucun lien ne se detache jamais de ses extremites. La couche lointaine est
+# plus petite, plus pale et plus lente ; l'ecart entre les deux cree une
+# impression de profondeur.
 #
-#   - L'animation ne deplace PAS les noeuds. Des points qui bougent alors que
-#     les liens restent fixes donnent une figure disloquee. Ce qui bouge, ce
-#     sont des impulsions lumineuses qui parcourent les liens, plus un lent
-#     battement des noeuds : le reseau a l'air vivant sans se deformer.
-#   - Un degrade de masque efface le motif sous le titre. Le texte n'est donc
-#     jamais pose sur un fond charge.
+# S'y ajoutent trois mouvements qui, eux, ne deplacent rien :
+#   - des impulsions lumineuses qui parcourent les liens d'un bout a l'autre ;
+#   - un battement lent des noeuds ;
+#   - des ondes qui s'echappent des noeuds les plus connectes.
 #
-# Le motif est un SVG servi en `background-image`. Un SVG appele ainsi ne peut
-# pas executer de script — ce que Streamlit interdirait de toute facon — mais
-# ses animations CSS, elles, fonctionnent. C'est aussi ce qui permet de
-# respecter le reglage systeme « reduire les animations », via une media query
-# ecrite a l'interieur du motif.
+# Le motif est servi en `background-image`. Un SVG appele ainsi ne peut pas
+# executer de script — ce que Streamlit interdirait de toute facon — mais ses
+# animations CSS fonctionnent. C'est aussi ce qui permet de respecter le
+# reglage systeme « reduire les animations », via une media query ecrite a
+# l'interieur du motif.
 
 import base64
 import math
 import random
 
 
-def _motif_reseau(largeur: int = 1600, hauteur: int = 150,
-                  noeuds: int = 36, graine: int = 7) -> str:
+def _couche(alea: random.Random, largeur: int, hauteur: int,
+            nb_noeuds: int, colonnes: int, portee: float,
+            max_liens: int) -> tuple[list, list]:
+    """Points repartis sur une grille bruitee, et liens courts entre eux.
+
+    La grille evite deux defauts du tirage purement aleatoire : les paquets de
+    points colles et les grands vides. Le bruit evite l'effet quadrillage.
+    """
+    rangees = max(1, round(nb_noeuds / colonnes))
+    points = []
+    for i in range(nb_noeuds):
+        col, rang = i % colonnes, (i // colonnes) % rangees
+        x = (col + 0.5) * largeur / colonnes + alea.uniform(-0.46, 0.46) * largeur / colonnes
+        y = (rang + 0.5) * hauteur / rangees + alea.uniform(-0.42, 0.42) * hauteur / rangees
+        points.append((round(min(max(x, 6), largeur - 6), 1),
+                       round(min(max(y, 6), hauteur - 6), 1)))
+
+    liens = [(i, j)
+             for i, a in enumerate(points)
+             for j, b in enumerate(points[i + 1:], start=i + 1)
+             if math.dist(a, b) < portee]
+    alea.shuffle(liens)
+    return points, liens[:max_liens]
+
+
+def _motif_reseau(largeur: int = 1800, hauteur: int = 170, graine: int = 11) -> str:
     """SVG du reseau anime. Graine fixe : le motif ne change pas d'une
     execution a l'autre."""
     alea = random.Random(graine)
 
-    # Points repartis sur une grille bruitee : ni alignes, ni agglutines.
-    points, colonnes, rangees = [], 9, 4
-    for i in range(noeuds):
-        col, rang = i % colonnes, (i // colonnes) % rangees
-        x = (col + 0.5) * largeur / colonnes + alea.uniform(-52, 52)
-        y = (rang + 0.5) * hauteur / rangees + alea.uniform(-18, 18)
-        points.append((round(min(max(x, 12), largeur - 12), 1),
-                       round(min(max(y, 12), hauteur - 12), 1)))
+    # Couche proche : grosse, nette, rapide. Couche lointaine : fine et pale.
+    proche_pts, proche_liens = _couche(alea, largeur, hauteur, 40, 10, 205, 62)
+    loin_pts,   loin_liens   = _couche(alea, largeur, hauteur, 30, 8,  245, 40)
 
-    # Liens courts uniquement : au-dela, le graphe devient une bouillie.
-    liens = []
-    for i, (x1, y1) in enumerate(points):
-        for j, (x2, y2) in enumerate(points[i + 1:], start=i + 1):
-            if math.dist((x1, y1), (x2, y2)) < 215:
-                liens.append((i, j))
-    alea.shuffle(liens)
-    liens = liens[:46]
+    def dessiner(points, liens, prefixe, rayons):
+        traits = "".join(
+            f'<line class="{prefixe}l v{n % 5}" x1="{points[i][0]}" y1="{points[i][1]}" '
+            f'x2="{points[j][0]}" y2="{points[j][1]}"/>'
+            for n, (i, j) in enumerate(liens)
+        )
+        ronds = "".join(
+            f'<circle class="{prefixe}n b{n % 6}" cx="{x}" cy="{y}" '
+            f'r="{rayons[n % len(rayons)]}"/>'
+            for n, (x, y) in enumerate(points)
+        )
+        return traits + ronds
 
-    traces_liens = "".join(
-        f'<line class="l l{n % 4}" x1="{points[i][0]}" y1="{points[i][1]}" '
-        f'x2="{points[j][0]}" y2="{points[j][1]}"/>'
-        for n, (i, j) in enumerate(liens)
+    # Noeuds les plus connectes : ils emettent une onde.
+    degres = {}
+    for (i, j) in proche_liens:
+        degres[i] = degres.get(i, 0) + 1
+        degres[j] = degres.get(j, 0) + 1
+    concentrateurs = sorted(degres, key=lambda k: -degres[k])[:4]
+    ondes = "".join(
+        f'<circle class="o" cx="{proche_pts[i][0]}" cy="{proche_pts[i][1]}" '
+        f'r="3" style="animation-delay:{k * 2.6:.1f}s"/>'
+        for k, i in enumerate(concentrateurs)
     )
-    traces_noeuds = "".join(
-        f'<circle class="n n{n % 5}" cx="{x}" cy="{y}" '
-        f'r="{2.1 + (n % 3) * 0.8:.1f}"/>'
-        for n, (x, y) in enumerate(points)
-    )
 
-    # Impulsions : quelques points qui parcourent un lien d'un bout a l'autre.
+    # Impulsions : des points qui parcourent un lien d'un bout a l'autre.
     impulsions = ""
-    for k, (i, j) in enumerate(liens[:7]):
-        (x1, y1), (x2, y2) = points[i], points[j]
+    for k, (i, j) in enumerate(proche_liens[:14]):
+        (x1, y1), (x2, y2) = proche_pts[i], proche_pts[j]
+        if k % 2:                      # une fois sur deux, dans l'autre sens
+            (x1, y1), (x2, y2) = (x2, y2), (x1, y1)
         impulsions += (
-            f'<circle class="p" r="2.6" cx="0" cy="0" '
-            f'style="animation-delay:{k * 1.2:.1f}s;'
+            f'<circle class="p" r="2.5" cx="0" cy="0" '
+            f'style="animation-delay:{k * 0.85:.2f}s;'
             f'--x1:{x1}px;--y1:{y1}px;--x2:{x2}px;--y2:{y2}px"/>'
         )
 
     style = f"""
-    .l {{ stroke:{ORANGE}; stroke-width:1.1; stroke-opacity:.32;
-          stroke-dasharray:5 9; animation:file 7s linear infinite; }}
-    .l1 {{ animation-duration:9s; animation-delay:-2s; }}
-    .l2 {{ animation-duration:11s; animation-delay:-4s; }}
-    .l3 {{ animation-duration:8s;  animation-delay:-6s; }}
-    .n {{ fill:{ORANGE}; animation:battement 5s ease-in-out infinite; }}
-    .n1 {{ animation-delay:-1s; }} .n2 {{ animation-delay:-2s; }}
-    .n3 {{ animation-delay:-3s; }} .n4 {{ animation-delay:-4s; }}
-    .p {{ fill:{ORANGE_CLAIR}; animation:trajet 8.5s ease-in-out infinite; }}
-    @keyframes file      {{ to {{ stroke-dashoffset:-56; }} }}
-    @keyframes battement {{ 0%,100% {{ opacity:.38; }} 50% {{ opacity:1; }} }}
+    .Pl {{ stroke:{ORANGE}; stroke-width:1.15; stroke-opacity:.34;
+           stroke-dasharray:6 10; animation:file 7s linear infinite; }}
+    .Ll {{ stroke:{ORANGE}; stroke-width:.8; stroke-opacity:.15;
+           stroke-dasharray:4 12; animation:file 13s linear infinite; }}
+    .v1 {{ animation-duration:9s;  animation-delay:-2s; }}
+    .v2 {{ animation-duration:11s; animation-delay:-4s; }}
+    .v3 {{ animation-duration:8s;  animation-delay:-6s; }}
+    .v4 {{ animation-duration:15s; animation-delay:-9s; }}
+    .Pn {{ fill:{ORANGE}; animation:battement 5s ease-in-out infinite; }}
+    .Ln {{ fill:{ORANGE}; opacity:.3; animation:battement 8s ease-in-out infinite; }}
+    .b1 {{ animation-delay:-.8s; }} .b2 {{ animation-delay:-1.7s; }}
+    .b3 {{ animation-delay:-2.6s; }} .b4 {{ animation-delay:-3.5s; }}
+    .b5 {{ animation-delay:-4.4s; }}
+    .p  {{ fill:{ORANGE_CLAIR}; animation:trajet 7s ease-in-out infinite; }}
+    .o  {{ fill:none; stroke:{ORANGE}; stroke-width:1.2;
+           animation:onde 6.5s ease-out infinite; }}
+
+    /* Chaque couche derive d'un bloc : les liens ne se detachent jamais. */
+    #proche {{ animation:derive_a 26s ease-in-out infinite alternate; }}
+    #loin   {{ animation:derive_b 37s ease-in-out infinite alternate; }}
+
+    @keyframes file      {{ to {{ stroke-dashoffset:-64; }} }}
+    @keyframes battement {{ 0%,100% {{ opacity:.34; }} 50% {{ opacity:1; }} }}
     @keyframes trajet {{
         0%       {{ transform:translate(var(--x1),var(--y1)); opacity:0; }}
-        12%      {{ opacity:.9; }}
-        45%,100% {{ transform:translate(var(--x2),var(--y2)); opacity:0; }}
+        10%      {{ opacity:.95; }}
+        55%,100% {{ transform:translate(var(--x2),var(--y2)); opacity:0; }}
     }}
+    @keyframes onde {{
+        0%   {{ r:3;  stroke-opacity:.55; }}
+        70%  {{ r:34; stroke-opacity:0; }}
+        100% {{ r:34; stroke-opacity:0; }}
+    }}
+    @keyframes derive_a {{ from {{ transform:translate(-22px,-6px); }}
+                           to   {{ transform:translate(22px,6px); }} }}
+    @keyframes derive_b {{ from {{ transform:translate(16px,5px); }}
+                           to   {{ transform:translate(-16px,-5px); }} }}
+
     @media (prefers-reduced-motion: reduce) {{
-        .l, .n, .p {{ animation: none; }}
-        .p {{ opacity: 0; }}
-        .n {{ opacity: .5; }}
+        .Pl, .Ll, .Pn, .Ln, .p, .o, #proche, #loin {{ animation: none; }}
+        .p, .o {{ opacity: 0; }}
+        .Pn {{ opacity: .55; }}
     }}
     """
 
@@ -294,22 +346,25 @@ def _motif_reseau(largeur: int = 1600, hauteur: int = 150,
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {largeur} {hauteur}" '
         f'width="{largeur}" height="{hauteur}" preserveAspectRatio="xMidYMid slice">'
         f'<style>{style}</style>'
-        # Le motif occupe toute la largeur du bandeau et s'efface a ses
-        # quatre bords, pour qu'aucune ligne ne s'arrete net.
+        # Le motif s'efface a ses quatre bords : aucune ligne ne s'arrete net,
+        # et il se fond dans la page juste avant le titre.
         f'<defs>'
         f'<linearGradient id="h" x1="0" x2="1">'
-        f'<stop offset="0" stop-color="#000"/><stop offset=".07" stop-color="#fff"/>'
-        f'<stop offset=".93" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
+        f'<stop offset="0" stop-color="#000"/><stop offset=".06" stop-color="#fff"/>'
+        f'<stop offset=".94" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
         f'</linearGradient>'
         f'<linearGradient id="v" x1="0" y1="0" x2="0" y2="1">'
-        f'<stop offset="0" stop-color="#555"/><stop offset=".3" stop-color="#fff"/>'
-        f'<stop offset=".82" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
+        f'<stop offset="0" stop-color="#666"/><stop offset=".26" stop-color="#fff"/>'
+        f'<stop offset=".8" stop-color="#fff"/><stop offset="1" stop-color="#000"/>'
         f'</linearGradient>'
         f'<mask id="mh"><rect width="{largeur}" height="{hauteur}" fill="url(#h)"/></mask>'
         f'<mask id="mv"><rect width="{largeur}" height="{hauteur}" fill="url(#v)"/></mask>'
         f'</defs>'
         f'<g mask="url(#mh)"><g mask="url(#mv)">'
-        f'{traces_liens}{impulsions}{traces_noeuds}</g></g>'
+        f'<g id="loin">{dessiner(loin_pts, loin_liens, "L", [1.4, 1.8, 2.2])}</g>'
+        f'<g id="proche">{dessiner(proche_pts, proche_liens, "P", [2.2, 2.9, 3.6])}'
+        f'{ondes}{impulsions}</g>'
+        f'</g></g>'
         f'</svg>'
     )
 
@@ -322,14 +377,19 @@ def css_reseau() -> str:
 
     Il occupait d'abord le fond du bandeau de titre, ou il devait s'effacer
     sous le texte : la moitie du motif etait perdue. Il occupe desormais la
-    bande vide qui surmonte ce titre, sur toute la largeur, sans rien a
-    menager — c'est le seul endroit de la page ou un motif ne gene personne.
+    bande vide qui le surmonte, sur toute la largeur de la zone de contenu —
+    le seul endroit de la page ou un motif ne gene personne.
+
+    Les marges negatives le font deborder de la colonne de texte pour aller
+    d'un bord a l'autre ; `overflow-x: hidden` sur la zone principale le coupe
+    net a ses limites, sinon il passerait par-dessus la barre laterale.
     """
     motif = base64.b64encode(_motif_reseau().encode("utf-8")).decode("ascii")
     return f"""<style>
+[data-testid="stMain"] {{ overflow-x: hidden; }}
 .bandeau-reseau {{
-    height: 120px;
-    margin: -26px 0 -6px 0;
+    height: 168px;
+    margin: -30px -7rem -10px -7rem;
     background-image: url("data:image/svg+xml;base64,{motif}");
     background-repeat: no-repeat;
     background-position: center;
@@ -337,17 +397,11 @@ def css_reseau() -> str:
     pointer-events: none;
 }}
 @media (max-width: 820px) {{
-    .bandeau-reseau {{ height: 64px; margin: -10px 0 -4px 0; }}
+    .bandeau-reseau {{ height: 76px; margin: -12px -14px -6px -14px; }}
 }}
 </style>"""
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HABILLAGE NEO-TACTILE
-# ══════════════════════════════════════════════════════════════════════════════
-# Injecte en dernier. Trois principes :
-#   1. la profondeur vient de l'ombre, pas du trait ;
-#   2. le verre depoli habille les panneaux, jamais le fond d'un texte dense ;
 #   3. l'orange ne sert qu'a ce qui est actif — sinon il ne veut plus rien dire.
 CSS_NEO = """<style>
 
