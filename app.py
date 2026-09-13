@@ -220,6 +220,7 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
 
+    st.markdown(BANDEAU_RESEAU, unsafe_allow_html=True)
     st.markdown("""
     <div class="login-hero">
         <p class="login-kicker">Atelier mecanique</p>
@@ -364,7 +365,7 @@ if st.session_state.get("authenticated") and st.session_state.get("user_role") =
 # Toute la feuille ci-dessous n'utilise plus que des var(--...). Changer de
 # mode revient donc à réécrire ce seul bloc :root.
 from backend.ui_theme import (
-    PALETTE, css_variables, css_reseau,
+    PALETTE, css_variables, css_reseau, BANDEAU_RESEAU,
     CSS_CORRECTIF, CSS_NEO, CSS_MOBILE, BANNIERE_MOBILE,
 )
 
@@ -1365,6 +1366,7 @@ PAGE_LABELS = {
 # ── Header ─────────────────────────────────────────────────────────────────────
 now = datetime.now()
 st.markdown(f"""
+{BANDEAU_RESEAU}
 <p class="masthead-eyebrow">{icon_img('icon-streamlit.png', 18)} SYSTÈME DE PILOTAGE INDUSTRIEL</p>
 <div class="masthead-accent"></div>
 <div class="header-banner">
