@@ -28,7 +28,12 @@ SESSION_REFRESH_THRESHOLD_DAYS = 3
 
 
 class DatabaseUnavailable(Exception):
-    """Supabase est injoignable (DNS, reseau, projet en pause ou supprime)."""
+    """Supabase inutilisable : reseau/DNS, projet en pause, ou cle refusee.
+
+    Dans tous ces cas l'application ne peut rien faire, mais ce n'est PAS une
+    erreur d'identifiants : il ne faut ni supprimer le cookie de session, ni
+    afficher "mot de passe incorrect".
+    """
 
 
 _CONNECTION_MARKERS = (
@@ -47,19 +52,55 @@ _CONNECTION_MARKERS = (
 )
 
 
+# Cle API refusee par Supabase. Cas le plus frequent en pratique : la cle a ete
+# changee dans secrets.toml alors que l'application tournait deja. get_client()
+# est decore avec @st.cache_resource, donc le client garde l'ANCIENNE cle en
+# memoire jusqu'au redemarrage.
+_AUTH_MARKERS = (
+    "invalid api key",
+    "unregistered api key",
+    "no api key found",
+    "invalid jwt",
+    "jwt expired",
+    "invalid authentication credentials",
+)
+
+
+def _error_text(exc: BaseException) -> str:
+    return f"{type(exc).__name__}: {exc}".lower()
+
+
+def _is_auth_error(exc: BaseException) -> bool:
+    return any(marker in _error_text(exc) for marker in _AUTH_MARKERS)
+
+
 def _is_connection_error(exc: BaseException) -> bool:
-    """Distingue une panne reseau/DNS d'une vraie erreur metier."""
-    text = f"{type(exc).__name__}: {exc}".lower()
-    return any(marker in text for marker in _CONNECTION_MARKERS)
+    return any(marker in _error_text(exc) for marker in _CONNECTION_MARKERS)
 
 
-def _connection_hint(exc: BaseException) -> str:
+def _is_backend_unavailable(exc: BaseException) -> bool:
+    """Distingue une panne d'infrastructure d'une vraie erreur metier."""
+    return _is_connection_error(exc) or _is_auth_error(exc)
+
+
+def _backend_hint(exc: BaseException) -> str:
+    detail = f"[Detail technique : {type(exc).__name__}: {exc}]"
+
+    if _is_auth_error(exc):
+        return (
+            "Cle API Supabase refusee. Si tu viens de changer SUPABASE_KEY, "
+            "l'application tourne encore avec l'ancienne cle gardee en cache : "
+            "arrete-la (Ctrl+C dans le terminal) et relance 'streamlit run "
+            "app.py'. Sinon, verifie la cle dans Supabase > Project Settings > "
+            f"API Keys, puis lance 'python check_supabase.py'. {detail}"
+        )
+
     return (
         "Base de donnees injoignable. Le projet Supabase est probablement en "
         "pause (plan gratuit : pause automatique apres ~7 jours d'inactivite), "
         "supprime, ou l'URL dans .streamlit/secrets.toml est incorrecte. "
         "Ouvre https://supabase.com/dashboard et clique sur Restore si le "
-        f"projet est en pause. [Detail technique : {type(exc).__name__}: {exc}]"
+        f"projet est en pause. {detail}"
     )
 
 
@@ -468,8 +509,8 @@ def get_user(username: str) -> dict | None:
         # Une panne reseau/DNS ne doit PAS etre confondue avec
         # "utilisateur introuvable" : sinon l'ecran de connexion affiche
         # "Identifiant ou mot de passe incorrect" alors que la base est morte.
-        if _is_connection_error(e):
-            raise DatabaseUnavailable(_connection_hint(e)) from e
+        if _is_backend_unavailable(e):
+            raise DatabaseUnavailable(_backend_hint(e)) from e
         return None
 
 
@@ -497,8 +538,8 @@ def create_user(username: str, password: str, role: str = "user") -> tuple[bool,
     except DatabaseUnavailable as e:
         return False, str(e)
     except Exception as e:
-        if _is_connection_error(e):
-            return False, _connection_hint(e)
+        if _is_backend_unavailable(e):
+            return False, _backend_hint(e)
         return False, str(e)
 
 
