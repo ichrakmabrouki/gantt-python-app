@@ -1,102 +1,92 @@
 """
-ui_theme.py — palettes clair / sombre et adaptation mobile.
+ui_theme.py — palette, habillage « Neo-Tactile » et adaptation mobile.
 
-L'application était entièrement figée en sombre : quarante couleurs écrites en
-dur dans une feuille de style de 700 lignes. Ce module extrait ces couleurs
-dans des variables CSS, ce qui permet de basculer tout l'habillage en changeant
-seulement le bloc `:root`.
+L'application n'a qu'un seul theme, sombre. Ce n'est pas un renoncement mais
+une contrainte du framework : les tableaux `st.dataframe` sont dessines dans un
+canvas qui suit le theme declare dans `.streamlit/config.toml`, choisi au
+demarrage du serveur et identique pour toute la session. Aucune feuille de
+style ne peut les repeindre. Proposer une bascule clair / sombre revenait donc
+a promettre un mode clair ou les tableaux restaient noirs — et un mode sombre
+ou ils restaient blancs. Un theme unique, entierement maitrise, vaut mieux que
+deux themes a moitie tenus.
 
-L'orange de la marque (#ff6b00) est identique dans les deux modes. Ce qui
-change, ce sont les fonds, les textes et les bordures.
+Le style reprend les codes de l'interface dite « neo-tactile » : surfaces en
+verre depoli posees sur un fond profond, epaisseur donnee par l'ombre plutot
+que par le trait, et un halo orange reserve a ce qui est actif. La regle de
+lisibilite prime : le verre habille les panneaux et les cartes, jamais le fond
+direct d'un paragraphe ni celui d'un tableau.
 """
 
-ORANGE = "#ff6b00"
-ORANGE_CLAIR = "#ee8a32"
-ORANGE_SOMBRE = "#d87722"
+# ── Couleurs ──────────────────────────────────────────────────────────────────
+# Les valeurs sont pleines (pas de transparence) : elles servent aussi aux
+# graphiques Plotly, qui ne savent pas lire une variable CSS.
+ORANGE        = "#ff7a1a"   # orange de marque, aplats et halos
+ORANGE_CLAIR  = "#ff9a4d"   # survol
+ORANGE_PROFOND = "#e0620c"  # appui
 
-PALETTES = {
-    "sombre": {
-        "fond":         "#0d1117",
-        "fond2":        "#0b1014",
-        "surface":      "#161b22",
-        "surface2":     "#1c2333",
-        "bordure":      "#30363d",
-        "texteFort":    "#f3f4f6",
-        "texte":        "#c9d1d9",
-        "texteFaible":  "#8b949e",
-        "accent":       ORANGE,
-        "accent2":      ORANGE_CLAIR,
-        "accent3":      ORANGE_SOMBRE,
-        "succes":       "#3fb950",
-        "succesBord":   "#238636",
-        "succesFond":   "#0f2a1a",
-        "info":         "#58a6ff",
-        "infoBord":     "#1f6feb",
-        "infoFond":     "#0d1b2a",
-        "alerte":       "#d6a536",
-        "danger":       "#d85b5b",
-        "ombre":        "rgba(0,0,0,0.35)",
-        "voile":        "rgba(255,255,255,0.03)",
-        "schema":       "dark",
-    },
-    "clair": {
-        "fond":         "#ffffff",
-        "fond2":        "#f6f7f9",
-        "surface":      "#ffffff",
-        "surface2":     "#f1f3f5",
-        "bordure":      "#dfe3e8",
-        "texteFort":    "#111827",
-        "texte":        "#374151",
-        "texteFaible":  "#6b7280",
-        "accent":       ORANGE,
-        "accent2":      ORANGE_SOMBRE,
-        "accent3":      "#b45309",
-        "succes":       "#128a4d",
-        "succesBord":   "#16a34a",
-        "succesFond":   "#e8f6ee",
-        "info":         "#1d4ed8",
-        "infoBord":     "#2563eb",
-        "infoFond":     "#eaf1fd",
-        "alerte":       "#a16207",
-        "danger":       "#b91c1c",
-        "ombre":        "rgba(15,23,42,0.10)",
-        "voile":        "rgba(15,23,42,0.03)",
-        "schema":       "light",
-    },
+PALETTE: dict[str, str] = {
+    "fond":         "#070a10",
+    "fond2":        "#0b0f17",
+    "surface":      "#121724",
+    "surface2":     "#1a2130",
+    "bordure":      "#2a3346",
+    "texteFort":    "#f4f7fb",
+    "texte":        "#c6cede",
+    "texteFaible":  "#7f8aa0",
+    "accent":       ORANGE,
+    "accent2":      ORANGE_CLAIR,
+    "accent3":      ORANGE,
+    "succes":       "#35d07f",
+    "succesBord":   "#1f8f57",
+    "succesFond":   "#0e2419",
+    "info":         "#58a6ff",
+    "infoBord":     "#2a6fd8",
+    "infoFond":     "#0d1b2e",
+    "alerte":       "#ffb020",
+    "danger":       "#ff5f6d",
+    "ombre":        "rgba(0,0,0,0.55)",
+    "voile":        "rgba(255,255,255,0.05)",
+    "schema":       "dark",
 }
 
+# `palette=` de build_gantt attend un dictionnaire ; on garde la meme forme.
+PALETTES = {"sombre": PALETTE}
 
-def css_variables(mode: str = "sombre") -> str:
-    """Bloc `:root` correspondant au mode demandé."""
-    p = PALETTES.get(mode, PALETTES["sombre"])
+
+def css_variables() -> str:
+    """Bloc `:root` : toute la feuille de style ne lit que ces variables."""
     lignes = "\n".join(
-        f"  --{cle}: {valeur};" for cle, valeur in p.items() if cle != "schema"
+        f"  --{cle}: {valeur};" for cle, valeur in PALETTE.items() if cle != "schema"
     )
     return f"""<style>
 :root {{
 {lignes}
+  --rayon:        18px;
+  --rayon-petit:  12px;
+  --verre:        linear-gradient(160deg, rgba(255,255,255,0.065),
+                                          rgba(255,255,255,0.022));
+  --verre-bord:   rgba(255,255,255,0.085);
+  --verre-haut:   inset 0 1px 0 rgba(255,255,255,0.075);
+  --relief:       0 18px 42px -26px rgba(0,0,0,0.95);
+  --halo:         0 0 0 1px rgba(255,122,26,0.30), 0 10px 30px -12px rgba(255,122,26,0.55);
   --police-titre: 'Rajdhani', sans-serif;
   --police-texte: 'Inter', sans-serif;
 }}
-html {{ color-scheme: {p['schema']}; }}
+html {{ color-scheme: dark; }}
 </style>"""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CORRECTIF DE CONTRASTE
 # ══════════════════════════════════════════════════════════════════════════════
-# Streamlit habille lui-même une partie de l'interface : menus déroulants,
-# info-bulles, barre d'outils, flèches des champs numériques, tableaux. Ces
-# éléments suivent le thème déclaré dans `.streamlit/config.toml`, pas notre
-# bloc `:root`. Tant qu'ils n'étaient pas repris ici, la bascule en mode clair
-# laissait des fonds sombres sous des textes et des icônes devenus noirs —
-# donc illisibles.
-#
-# Ce bloc est injecté APRÈS la feuille de style principale, pour passer devant.
-# Il n'utilise que des variables : il vaut donc pour les deux modes.
+# Streamlit habille lui-meme une partie de l'interface : menus deroulants,
+# info-bulles, barre d'outils, fleches des champs numeriques, tableaux. Ces
+# elements ne lisent pas le bloc `:root` ci-dessus. On les reprend ici, apres
+# la feuille principale, pour qu'aucun texte ni aucune icone ne se retrouve
+# sur un fond qui n'a pas ete choisi.
 CSS_CORRECTIF = """<style>
 
-/* Fenêtres flottantes : listes déroulantes, menus, info-bulles */
+/* Fenetres flottantes : listes deroulantes, menus, info-bulles, calendrier */
 [data-baseweb="popover"] > div,
 [data-baseweb="menu"],
 [data-baseweb="tooltip"],
@@ -106,7 +96,9 @@ CSS_CORRECTIF = """<style>
 [role="tooltip"] {
     background: var(--surface) !important;
     color: var(--texte) !important;
-    border: 1px solid var(--bordure) !important;
+    border: 1px solid var(--verre-bord) !important;
+    border-radius: var(--rayon-petit) !important;
+    box-shadow: var(--relief) !important;
 }
 [data-baseweb="menu"] li,
 [role="option"] {
@@ -120,22 +112,15 @@ CSS_CORRECTIF = """<style>
     color: var(--accent) !important;
 }
 
-/* Barre d'outils et en-tête de Streamlit */
+/* Barre d'outils et en-tete de Streamlit */
 [data-testid="stHeader"],
 [data-testid="stToolbar"],
-[data-testid="stDecoration"] {
-    background: transparent !important;
-}
+[data-testid="stDecoration"] { background: transparent !important; }
 [data-testid="stToolbar"] button,
-[data-testid="stMainMenu"] button {
-    color: var(--texte) !important;
-}
+[data-testid="stMainMenu"] button { color: var(--texteFaible) !important; }
 
-/* Une icône ne décide jamais seule de sa couleur : elle suit son texte.
-   C'est ce qui évitait une icône noire sur un bouton resté sombre. */
-button svg,
-summary svg,
-label svg,
+/* Une icone ne decide jamais seule de sa couleur : elle suit son texte. */
+button svg, summary svg, label svg,
 [data-testid="stToolbar"] svg,
 [data-baseweb="select"] svg,
 [data-testid="stExpander"] svg,
@@ -147,25 +132,8 @@ label svg,
 }
 .stButton > button *,
 [data-testid="stFormSubmitButton"] > button *,
-.stDownloadButton > button * {
-    color: inherit !important;
-}
+.stDownloadButton > button * { color: inherit !important; }
 
-/* Tout bouton a un fond explicite : plus de texte sombre sur fond sombre */
-[data-testid="stFormSubmitButton"] > button {
-    background: var(--accent) !important;
-    border: 1px solid var(--accent) !important;
-    color: var(--fond) !important;
-    font-weight: 700 !important;
-}
-[data-testid="stFormSubmitButton"] > button:hover {
-    background: var(--accent2) !important;
-    border-color: var(--accent2) !important;
-}
-[data-testid="stExpander"] [data-testid="stFormSubmitButton"] > button {
-    min-height: 30px !important;
-    font-size: 11px !important;
-}
 [data-testid="stNumberInputStepUp"],
 [data-testid="stNumberInputStepDown"] {
     background: var(--surface2) !important;
@@ -173,8 +141,8 @@ label svg,
     border-color: var(--bordure) !important;
 }
 
-/* Tableaux : la grille est dessinée dans un canvas, elle ne se colore
-   qu'à travers ses propres variables. */
+/* Tableaux : la grille est dessinee dans un canvas et se colore par ses
+   propres variables. */
 [data-testid="stDataFrame"],
 [data-testid="stDataFrameResizable"],
 [data-testid="stDataFrameResizable"] > div {
@@ -191,63 +159,288 @@ label svg,
     --gdg-border-color: var(--bordure);
     --gdg-horizontal-border-color: var(--bordure);
     --gdg-accent-color: var(--accent);
-    --gdg-accent-fg: var(--fond);
-    --gdg-accent-light: var(--voile);
+    --gdg-accent-fg: #140a02;
+    --gdg-accent-light: rgba(255,122,26,0.16);
     --gdg-bg-bubble: var(--surface2);
     --gdg-bg-bubble-selected: var(--surface2);
-    --gdg-bg-search-result: var(--voile);
+    --gdg-bg-search-result: rgba(255,122,26,0.16);
     --gdg-fg-icon-header: var(--texteFaible);
 }
 
-/* Messages d'information, blocs de code, onglets */
-[data-testid="stAlert"] {
-    background: var(--surface2) !important;
-    border: 1px solid var(--bordure) !important;
-    border-left: 3px solid var(--accent) !important;
-}
-[data-testid="stAlert"] * { color: var(--texte) !important; }
 pre, code, [data-testid="stCode"] {
     background: var(--surface2) !important;
     color: var(--texte) !important;
+    border-radius: var(--rayon-petit) !important;
 }
+
 /* Barre d'outils des graphiques Plotly */
 .modebar, .modebar-group { background: transparent !important; }
 .modebar-btn path { fill: var(--texteFaible) !important; }
 .modebar-btn:hover path { fill: var(--accent) !important; }
 
-.stTabs [data-baseweb="tab"] { color: var(--texteFaible) !important; }
-.stTabs [data-baseweb="tab"][aria-selected="true"] { color: var(--accent) !important; }
+[data-testid="stCheckbox"] label span,
+[data-testid="stRadio"] label span { color: var(--texte) !important; }
 
 /* Badge de session : orange, pas vert */
 .status-badge-accent {
-    background: var(--surface2) !important;
-    border-color: var(--accent) !important;
+    background: rgba(255,122,26,0.10) !important;
+    border-color: rgba(255,122,26,0.35) !important;
     color: var(--accent) !important;
 }
 
-/* Cases à cocher et boutons radio */
-[data-testid="stCheckbox"] label span,
-[data-testid="stRadio"] label span { color: var(--texte) !important; }
+/* Icones SVG en ligne */
+.ico { opacity: 0.95; }
 </style>"""
 
 
-def css_correctif(mode: str = "sombre") -> str:
-    """Correctif de contraste ; identique dans les deux modes, il ne lit que
-    les variables du bloc `:root` déjà injecté."""
-    return CSS_CORRECTIF
+# ══════════════════════════════════════════════════════════════════════════════
+# HABILLAGE NEO-TACTILE
+# ══════════════════════════════════════════════════════════════════════════════
+# Injecte en dernier. Trois principes :
+#   1. la profondeur vient de l'ombre, pas du trait ;
+#   2. le verre depoli habille les panneaux, jamais le fond d'un texte dense ;
+#   3. l'orange ne sert qu'a ce qui est actif — sinon il ne veut plus rien dire.
+CSS_NEO = """<style>
+
+/* ── Fond : deux halos tres larges, pour que la page ne soit pas un aplat ── */
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(1100px 620px at 12% -12%, rgba(255,122,26,0.10), transparent 62%),
+        radial-gradient(900px 520px at 102% 4%, rgba(88,166,255,0.07), transparent 58%),
+        var(--fond) !important;
+}
+.block-container { padding-top: 2.2rem !important; }
+
+/* ── Barre laterale en verre ─────────────────────────────────────────────── */
+[data-testid="stSidebar"] > div:first-child,
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(255,255,255,0.055),
+                                        rgba(255,255,255,0.015)) !important;
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border-right: 1px solid var(--verre-bord) !important;
+}
+
+/* ── Panneaux ────────────────────────────────────────────────────────────── */
+[data-testid="stMetric"],
+[data-testid="stExpander"],
+[data-testid="stForm"],
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stFileUploader"] section,
+[data-testid="stAlert"],
+.dl-card,
+.accueil-bloc,
+.header-banner,
+.stTabs [data-baseweb="tab-panel"] > div > div {
+    background: var(--verre) !important;
+    border: 1px solid var(--verre-bord) !important;
+    border-radius: var(--rayon) !important;
+    backdrop-filter: blur(16px) saturate(130%);
+    -webkit-backdrop-filter: blur(16px) saturate(130%);
+    box-shadow: var(--relief), var(--verre-haut) !important;
+}
+[data-testid="stMetric"] { padding: 16px 18px !important; }
+[data-testid="stMetricValue"] { color: var(--texteFort) !important; font-weight: 700 !important; }
+[data-testid="stMetricLabel"] { color: var(--texteFaible) !important; }
+
+/* Un panneau change legerement de niveau au survol : c'est ce qui donne
+   l'impression de matiere. */
+[data-testid="stMetric"]:hover,
+.dl-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,122,26,0.28) !important;
+    transition: all .18s ease;
+}
+[data-testid="stMetric"], .dl-card { transition: all .18s ease; }
+
+/* Les messages gardent leur couleur de sens sur le bord gauche */
+[data-testid="stAlert"] { border-left: 3px solid var(--accent) !important; }
+
+/* ── Boutons ─────────────────────────────────────────────────────────────── */
+.stButton > button,
+[data-testid="stFormSubmitButton"] > button {
+    background: linear-gradient(180deg, var(--accent2), var(--accent)) !important;
+    border: 1px solid rgba(255,255,255,0.20) !important;
+    color: #150900 !important;
+    border-radius: var(--rayon-petit) !important;
+    font-weight: 700 !important;
+    box-shadow: 0 12px 26px -14px rgba(255,122,26,0.95),
+                inset 0 1px 0 rgba(255,255,255,0.40) !important;
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.stButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow: 0 16px 34px -14px rgba(255,122,26,1),
+                inset 0 1px 0 rgba(255,255,255,0.45) !important;
+}
+.stButton > button:active,
+[data-testid="stFormSubmitButton"] > button:active {
+    transform: translateY(0);
+    filter: brightness(0.95);
+}
+
+/* Bouton secondaire : verre, pas d'orange — il ne doit pas concurrencer
+   l'action principale. */
+.stDownloadButton > button {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid var(--verre-bord) !important;
+    color: var(--texte) !important;
+    border-radius: var(--rayon-petit) !important;
+    box-shadow: var(--verre-haut) !important;
+}
+.stDownloadButton > button:hover {
+    background: rgba(255,255,255,0.09) !important;
+    border-color: rgba(255,122,26,0.40) !important;
+    color: var(--accent) !important;
+}
+
+/* ── Navigation laterale ─────────────────────────────────────────────────── */
+/* Page courante = bouton "primary" ; les autres restent en retrait. */
+[data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: var(--texteFaible) !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    box-shadow: none !important;
+    border-radius: var(--rayon-petit) !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(255,255,255,0.06) !important;
+    color: var(--texteFort) !important;
+    transform: none;
+    filter: none;
+}
+/* La specificite doit depasser celle de la regle generique ci-dessus, sans
+   quoi le bouton de la page courante resterait transparent. */
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"],
+[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: rgba(255,122,26,0.13) !important;
+    border: 1px solid rgba(255,122,26,0.38) !important;
+    color: var(--accent) !important;
+    box-shadow: inset 3px 0 0 var(--accent), 0 8px 22px -16px rgba(255,122,26,0.9) !important;
+}
+
+/* ── Champs ──────────────────────────────────────────────────────────────── */
+.stNumberInput > div > div > input,
+.stTextInput > div > div > input,
+[data-baseweb="input"],
+[data-baseweb="base-input"],
+[data-baseweb="select"] > div,
+textarea, input {
+    background: rgba(255,255,255,0.045) !important;
+    border: 1px solid var(--verre-bord) !important;
+    border-radius: var(--rayon-petit) !important;
+    color: var(--texteFort) !important;
+}
+[data-baseweb="input"]:focus-within,
+[data-baseweb="select"] > div:focus-within,
+input:focus, textarea:focus {
+    border-color: rgba(255,122,26,0.55) !important;
+    box-shadow: 0 0 0 3px rgba(255,122,26,0.14) !important;
+}
+
+/* ── Interrupteurs, cases et curseurs ────────────────────────────────────── */
+[data-baseweb="checkbox"] [role="checkbox"][aria-checked="true"],
+[data-testid="stCheckbox"] [aria-checked="true"],
+[data-baseweb="checkbox"] input:checked + div {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 14px -2px rgba(255,122,26,0.75) !important;
+}
+[data-testid="stSlider"] [role="slider"] {
+    background: var(--accent) !important;
+    border: 2px solid rgba(255,255,255,0.85) !important;
+    box-shadow: 0 0 16px -2px rgba(255,122,26,0.9) !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] div[style*="background"] {
+    border-radius: 999px !important;
+}
+
+/* ── Onglets ─────────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 6px !important;
+    background: rgba(255,255,255,0.035) !important;
+    border: 1px solid var(--verre-bord) !important;
+    border-radius: 999px !important;
+    padding: 5px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px !important;
+    padding: 6px 16px !important;
+    color: var(--texteFaible) !important;
+    font-weight: 600 !important;
+}
+.stTabs [data-baseweb="tab"]:hover { color: var(--texteFort) !important; }
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background: rgba(255,122,26,0.14) !important;
+    color: var(--accent) !important;
+    box-shadow: inset 0 0 0 1px rgba(255,122,26,0.35) !important;
+}
+.stTabs [data-baseweb="tab-highlight"],
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
+
+/* ── En-tete de page ─────────────────────────────────────────────────────── */
+.header-banner {
+    padding: 18px 22px !important;
+    margin-bottom: 18px !important;
+}
+.header-title {
+    background: linear-gradient(92deg, var(--texteFort) 15%, var(--accent) 95%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.masthead-accent {
+    height: 2px !important;
+    background: linear-gradient(90deg, var(--accent), rgba(255,122,26,0)) !important;
+    border-radius: 2px;
+}
+.divline {
+    height: 1px !important;
+    background: linear-gradient(90deg, var(--verre-bord), transparent) !important;
+}
+
+/* ── Graphiques ──────────────────────────────────────────────────────────── */
+.stPlotlyChart, [data-testid="stPlotlyChart"] {
+    background: var(--verre);
+    border: 1px solid var(--verre-bord);
+    border-radius: var(--rayon);
+    padding: 8px;
+    box-shadow: var(--relief), var(--verre-haut);
+}
+
+/* ── Ecriture ────────────────────────────────────────────────────────────── */
+.section-title {
+    color: var(--texteFort) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+}
+hr { border-color: var(--verre-bord) !important; }
+
+/* Mouvement retire pour qui l'a demande au niveau du systeme. */
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+    [data-testid="stMetric"]:hover, .dl-card:hover,
+    .stButton > button:hover { transform: none !important; }
+}
+</style>"""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ADAPTATION MOBILE
 # ══════════════════════════════════════════════════════════════════════════════
-# Streamlit ne replie pas les colonnes tout seul : sur un téléphone, un
+# Streamlit ne replie pas les colonnes tout seul : sur un telephone, un
 # st.columns([3,1,1]) reste sur une ligne et chaque colonne fait 80 pixels.
-# On force l'empilement, on réduit les marges, et on rend les tableaux et le
-# Gantt défilables horizontalement plutôt que de laisser la page déborder.
+# On force l'empilement, on reduit les marges, et on rend les tableaux et le
+# Gantt defilables horizontalement plutot que de laisser la page deborder.
 CSS_MOBILE = """<style>
 @media (max-width: 820px) {
 
-  /* Colonnes empilées */
   [data-testid="stHorizontalBlock"] {
       flex-direction: column !important;
       gap: 10px !important;
@@ -259,13 +452,11 @@ CSS_MOBILE = """<style>
       min-width: 0 !important;
   }
 
-  /* Marges rendues au contenu */
   .block-container {
       padding: 12px 14px 60px 14px !important;
       max-width: 100% !important;
   }
 
-  /* Titres ramenés à une taille lisible sur petit écran */
   .header-title      { font-size: 1.25rem !important; letter-spacing: 3px !important; }
   .header-banner     { flex-direction: column !important; align-items: flex-start !important;
                        gap: 10px !important; padding: 14px 16px !important; }
@@ -276,7 +467,7 @@ CSS_MOBILE = """<style>
   h2 { font-size: 1.15rem !important; }
   h3 { font-size: 1rem !important; }
 
-  /* Boutons pleine largeur et zone tactile suffisante (44 px recommandés) */
+  /* Zone tactile : 44 px, la valeur recommandee */
   .stButton > button,
   .stDownloadButton > button {
       width: 100% !important;
@@ -286,10 +477,9 @@ CSS_MOBILE = """<style>
   [data-baseweb="input"] input,
   [data-baseweb="select"] > div {
       min-height: 44px !important;
-      font-size: 16px !important;   /* < 16px déclenche le zoom auto sur iOS */
+      font-size: 16px !important;   /* < 16px declenche le zoom auto sur iOS */
   }
 
-  /* Tableaux et graphiques : défilement horizontal au lieu du débordement */
   [data-testid="stDataFrame"],
   [data-testid="stTable"],
   .js-plotly-plot,
@@ -299,12 +489,21 @@ CSS_MOBILE = """<style>
   }
   .js-plotly-plot .plotly { min-width: 560px !important; }
 
-  /* Métriques en colonne, plus compactes */
-  [data-testid="stMetric"]      { padding: 10px 12px !important; }
+  [data-testid="stMetric"]      { padding: 12px 14px !important; }
   [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
 
-  /* La sidebar prend presque tout l'écran une fois ouverte */
+  .stTabs [data-baseweb="tab-list"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
+  .stTabs [data-baseweb="tab"]      { min-width: max-content !important; }
+
   [data-testid="stSidebar"] { min-width: 78vw !important; }
+
+  /* Le verre depoli coute cher en calcul sur telephone : on l'allege. */
+  [data-testid="stMetric"], [data-testid="stExpander"], [data-testid="stForm"],
+  .dl-card, .accueil-bloc, .header-banner {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: var(--surface) !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -313,7 +512,6 @@ CSS_MOBILE = """<style>
   .js-plotly-plot .plotly { min-width: 480px !important; }
 }
 
-/* Le Gantt reste lisible : on ne laisse jamais la page déborder */
 [data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
 </style>"""
 
@@ -331,7 +529,7 @@ BANNIERE_MOBILE = """
     background: var(--surface2);
     border: 1px solid var(--bordure);
     border-left: 3px solid var(--accent);
-    border-radius: 4px;
+    border-radius: 12px;
     padding: 10px 14px;
     margin-bottom: 14px;
     font-size: 0.78rem !important;
