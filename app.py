@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import io
+import os
+import threading
 import uuid
 import base64
 from pathlib import Path
@@ -65,13 +67,47 @@ st.set_page_config(
     page_icon=str(ICON_DIR / "icon-streamlit.png"),
 )
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DEBUG — VIDER LE COOKIE (À SUPPRIMER APRÈS TEST)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Verrou partagé entre toutes les sessions ───────────────────────────────
+# st.cache_resource renvoie le MÊME objet à tous les visiteurs du conteneur :
+# c'est ce qui permet de sérialiser les résolutions sur un hébergement partagé.
+@st.cache_resource
+def _verrou_solveur() -> threading.Lock:
+    return threading.Lock()
+
+
+# ── Gestion des cookies de session ─────────────────────────────────────────
 cookie_manager = stx.CookieManager()
-# ══════════════════════════════════════════════════════════════════════════════
-# FIN DEBUG
-# ══════════════════════════════════════════════════════════════════════════════
+
+# CookieManager.set() et .delete() creent chacun un composant Streamlit dont la
+# cle vaut par defaut "set" et "delete". Streamlit exige une cle UNIQUE par
+# element dans un meme run : deux ecritures de cookie dans le meme passage du
+# script levent StreamlitDuplicateElementKey. C'est exactement ce qui arrive a
+# la connexion (clear_auth_session ecrit 4 cookies, puis on pose le nouveau).
+#
+# Ce compteur est remis a zero a chaque run (app.py est reexecute de haut en
+# bas par Streamlit), ce qui donne une cle unique et stable a chaque appel.
+_cookie_ops = 0
+
+
+def _cookie_key(action: str) -> str:
+    global _cookie_ops
+    _cookie_ops += 1
+    return f"cookie_{action}_{_cookie_ops}"
+
+
+def cookie_set(name: str, value: str, expires_at: datetime) -> None:
+    try:
+        cookie_manager.set(name, value, expires_at=expires_at,
+                           key=_cookie_key("set"))
+    except Exception:
+        pass
+
+
+def cookie_delete(name: str) -> None:
+    try:
+        cookie_manager.delete(name, key=_cookie_key("del"))
+    except Exception:
+        pass
 
 # ── Initialisation session state ───────────────────────────────────────────
 if "authenticated" not in st.session_state:
@@ -87,14 +123,8 @@ if "force_login" not in st.session_state:
 def clear_auth_session() -> None:
     expired_at = datetime.now() - timedelta(days=1)
     for cookie_name in ("gantt_session", "gantt_user"):
-        try:
-            cookie_manager.delete(cookie_name)
-        except Exception:
-            pass
-        try:
-            cookie_manager.set(cookie_name, "", expires_at=expired_at)
-        except Exception:
-            pass
+        cookie_delete(cookie_name)
+        cookie_set(cookie_name, "", expired_at)
 
     keep_force_login = st.session_state.get("force_login", False)
     for key in list(st.session_state.keys()):
@@ -106,11 +136,8 @@ session_cookie = cookie_manager.get("gantt_session")
 legacy_cookie = cookie_manager.get("gantt_user")
 
 if st.session_state.get("force_login"):
-    try:
-        cookie_manager.delete("gantt_session")
-        cookie_manager.delete("gantt_user")
-    except Exception:
-        pass
+    cookie_delete("gantt_session")
+    cookie_delete("gantt_user")
     session_cookie = None
     legacy_cookie = None
 
@@ -137,15 +164,15 @@ if session_cookie and not st.session_state["authenticated"] and not st.session_s
             if (should_refresh_session_token(session_cookie)
                     and not st.session_state.get("session_refreshed")):
                 st.session_state["session_refreshed"] = True
-                cookie_manager.set(
+                cookie_set(
                     "gantt_session",
                     create_session_token(username),
-                    expires_at=datetime.now() + timedelta(days=SESSION_DURATION_DAYS),
+                    datetime.now() + timedelta(days=SESSION_DURATION_DAYS),
                 )
         elif not st.session_state.get("db_error"):
-            cookie_manager.delete("gantt_session")
+            cookie_delete("gantt_session")
     else:
-        cookie_manager.delete("gantt_session")
+        cookie_delete("gantt_session")
 
 if legacy_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
     try:
@@ -158,13 +185,13 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
         st.session_state["authenticated"] = True
         st.session_state["SID"] = legacy_cookie.strip().lower()
         st.session_state["user_role"] = user.get("role", "user")
-        cookie_manager.set(
+        cookie_set(
             "gantt_session",
             create_session_token(st.session_state["SID"]),
-            expires_at=datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
+            datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
         )
     if not st.session_state.get("db_error"):
-        cookie_manager.delete("gantt_user")
+        cookie_delete("gantt_user")
 
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
@@ -217,12 +244,12 @@ if not st.session_state["authenticated"]:
                     if needs_password_rehash(user.get("password")):
                         update_user_password_hash(u, hash_password(p))
 
-                    cookie_manager.set(
+                    cookie_set(
                         "gantt_session",
                         create_session_token(u),
-                        expires_at=datetime.now() + timedelta(days=7)
+                        datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
                     )
-                    cookie_manager.delete("gantt_user")
+                    cookie_delete("gantt_user")
 
                     st.success("Connexion réussie")
                     st.rerun()
@@ -1269,13 +1296,31 @@ if menu == "Données":
         <p class='page-subtitle'>Uploadez votre fichier Excel template et lancez l'optimisation.</p>
     </div>""", unsafe_allow_html=True)
 
-    col_upload, col_btn = st.columns([3, 1])
+    # Le parseur attend une structure precise — noms de feuilles avec emojis,
+    # en-tetes sur des lignes determinees. Impossible a deviner : on fournit
+    # donc le modele en telechargement, rempli d'un exemple coherent.
+    col_upload, col_modele, col_btn = st.columns([3, 1.2, 1.2])
     with col_upload:
         excel_file = st.file_uploader(
             "Fichier Excel (template_gantt.xlsx)",
             type=["xlsx"], key="excel_solver",
-            help="Utilisez le template fourni. Les 4 feuilles doivent être complètes."
+            help="Partez du modèle ci-contre. Les 4 feuilles doivent être complètes."
         )
+    with col_modele:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        try:
+            from backend.template_excel import construire_template
+            st.download_button(
+                "TÉLÉCHARGER LE MODÈLE",
+                data=construire_template(),
+                file_name="template_gantt.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_template",
+                help="Classeur prêt à remplir, avec un exemple de 3 pièces "
+                     "sur 4 machines et 2 techniciens.",
+            )
+        except Exception as exc:
+            st.caption(f"Modèle indisponible : {type(exc).__name__}")
     with col_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         run_solver = st.button("CALCULER LE PLANNING", key="run_solver_btn")
@@ -1393,6 +1438,30 @@ if menu == "Données":
 
         profile = solve_profiles[solve_mode]
 
+        # ── Protection de l'hébergement ────────────────────────────────────
+        # Sur Streamlit Community Cloud, TOUS les visiteurs partagent un seul
+        # conteneur : ~1 Go de RAM et 1 à 2 cœurs.
+        #
+        # La mémoire n'est pas le problème : mesuré, le pire cas (396
+        # opérations) coûte +86 Mo au-dessus des 79 Mo de coût fixe, soit une
+        # dizaine de résolutions simultanées possibles dans 1 Go.
+        # Voir RAPPORT_MEMOIRE.md.
+        #
+        # Le CPU, lui, l'est. Une résolution occupe ses threads pendant 20 à
+        # 180 secondes selon le mode. Dix en parallèle sur deux cœurs, et
+        # chacune met dix fois plus longtemps : tout le monde attend davantage.
+        # Sérialiser est donc meilleur pour tous que paralléliser.
+        verrou = _verrou_solveur()
+        if not verrou.acquire(blocking=False):
+            st.warning(
+                "Une optimisation est déjà en cours pour un autre visiteur. "
+                "L'hébergement gratuit ne dispose que de quelques cœurs : les "
+                "calculs sont traités un par un. Réessaie dans une minute."
+            )
+            st.stop()
+
+        nb_workers = max(1, min(4, os.cpu_count() or 1))
+
         with st.spinner(
             f"Résolution en cours — mode {solve_mode.lower()} "
             f"({int(profile['max_time_seconds'])} s max)..."
@@ -1401,10 +1470,52 @@ if menu == "Données":
                 df_result  = solve_flexible_jobshop(
                     solver_data,
                     max_time_seconds=profile["max_time_seconds"],
-                    num_search_workers=8,
+                    num_search_workers=nb_workers,
                     log_search_progress=False,
                     relative_gap_limit=profile["relative_gap_limit"],
                 )
+                # ── Controle des contraintes sur le planning produit ───────
+                # Les tests ne couvrent que les fichiers testes. Ici, CHAQUE
+                # resolution reelle est relue et verifiee sur les
+                # 9 contraintes, quel que soit le fichier importe.
+                try:
+                    from verifier_planning import verifier_planning
+                    violations = verifier_planning(solver_data, df_result)
+                except Exception:
+                    violations = []
+
+                # ── Qualité de la solution ─────────────────────────────────
+                # Un planning valide n'est pas forcément un bon planning.
+                # L'écart à la borne inférieure dit de combien on pourrait
+                # encore progresser en laissant tourner plus longtemps.
+                infos = getattr(df_result, "attrs", {}) or {}
+                if "ecart_optimalite" in infos:
+                    ecart = infos["ecart_optimalite"]
+                    if infos.get("statut") == "OPTIMAL" or ecart <= 0.0001:
+                        st.success(
+                            f"Planning optimal prouvé — makespan "
+                            f"{infos['makespan']} min."
+                        )
+                    else:
+                        st.info(
+                            f"Makespan {infos['makespan']} min, à **{ecart:.1%}** "
+                            f"de la meilleure valeur théorique atteignable "
+                            f"({infos['borne_inferieure']} min). Le mode "
+                            f"Approfondi réduit généralement cet écart."
+                        )
+
+                if violations:
+                    st.error(
+                        f"Le planning calculé viole {len(violations)} "
+                        f"contrainte(s). Ne l'utilise pas en l'état et "
+                        f"signale le fichier importé."
+                    )
+                    with st.expander("Détail des violations"):
+                        for v in violations[:20]:
+                            st.write(f"- {v}")
+                        if len(violations) > 20:
+                            st.write(f"… et {len(violations) - 20} autre(s).")
+
                 gammes_map = {g[0]: g[1] for g in solver_data["gammes"]}
                 df_result["JobID"] = df_result["OperationID"].map(
                     gammes_map).fillna(0).astype(int)
@@ -1444,6 +1555,13 @@ if menu == "Données":
 
             except Exception as e:
                 st.error(f"Erreur solveur : {e}")
+            finally:
+                # Le verrou doit être relâché quoi qu'il arrive, sinon une
+                # seule erreur bloquerait l'application pour tout le monde.
+                try:
+                    verrou.release()
+                except Exception:
+                    pass
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — GANTT
