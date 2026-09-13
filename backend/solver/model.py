@@ -1,4 +1,46 @@
 # backend/solver/model.py
+#
+# VERSION 2 — reformulation native CP-SAT.
+#
+# La version 1 (conservee dans model_v1.py) encodait le probleme en style MILP :
+# une contrainte "si A alors B" s'ecrivait avec une grande constante M, et
+# l'ordre de passage sur une machine avec une variable booleenne PAR PAIRE
+# d'operations. Sur 395 operations cela donnait 276 178 variables, dont 98 %
+# de booleens de paires, et pres de 4 minutes rien que pour construire le modele.
+#
+# Cette version exprime les memes contraintes avec les primitives natives du
+# solveur :
+#
+#   - grand M            -> OnlyEnforceIf (reification exacte, aucune constante)
+#   - variables de paires -> intervalles optionnels + AddNoOverlap
+#
+# AddNoOverlap declenche les algorithmes d'ordonnancement dedies de CP-SAT
+# (timetabling, edge-finding), qui raisonnent sur l'ensemble des taches d'une
+# ressource au lieu de les comparer deux a deux.
+#
+# ── Correspondance avec les contraintes de la version 1 ──────────────────────
+#
+#   C1  assignation unique        -> AddExactlyOne
+#   C2  duree = temps operatoire  -> porte par la taille de l'intervalle optionnel
+#   C3  precedence des gammes     -> S[o2] >= E[o1], une contrainte par arc
+#   C4  debut apres fin de setup  -> OnlyEnforceIf
+#   C5  setup >= cte              -> OnlyEnforceIf
+#   C6  debut >= cte              -> direct
+#   C6b disponibilite machine     -> OnlyEnforceIf
+#   C7  machine : non-chevauchement + cte -> AddNoOverlap sur intervalles
+#                                            [S - cte, E] (le cte reserve
+#                                            devant chaque operation impose
+#                                            exactement S(o2) >= E(o1) + cte)
+#   C8  technicien : setups serialises    -> AddNoOverlap sur les intervalles
+#                                            de setup de chaque technicien
+#   C9  setup du successeur de gamme      -> OnlyEnforceIf
+#   C10 fin >= duree + setup              -> implique par C4 et C2, retire
+#
+# La semantique est identique a la version 1, y compris le fait qu'un setup est
+# exige de CHAQUE technicien rattache a la machine (et non d'un seul). Ce choix
+# est probablement involontaire dans le modele d'origine, mais il est conserve
+# ici pour que la comparaison avant/apres porte sur la formulation et sur rien
+# d'autre.
 
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -14,7 +56,7 @@ def solve_flexible_jobshop(
     model = cp_model.CpModel()
 
     params   = data['params']
-    cte      = data['cte']
+    cte      = int(data['cte'])
     gammes   = data['gammes']
     modes    = data['modes']
     pt       = data['pt']
@@ -24,237 +66,169 @@ def solve_flexible_jobshop(
         for machine_id, ready_time in data.get("machine_ready_times", {}).items()
     }
 
-    nbOps  = params['nbOps']
+    nbOps = params['nbOps']
 
     # ── Horizon ───────────────────────────────────────────────────────────────
-    horizon = sum(pt.values()) + cte * nbOps * 2 + max(machine_ready_times.values(), default=0)
+    horizon = (sum(pt.values()) + cte * nbOps * 2
+               + max(machine_ready_times.values(), default=0))
 
-    # ── Big-M ─────────────────────────────────────────────────────────────────
-    # M_big doit couvrir tout l'horizon. Sinon les contraintes du type
-    #   s[o2,m2] >= e[o1,m1] - M_big*(1-x[o1,m1]) - M_big*(1-x[o2,m2])
-    # ne se relachent pas quand l'operation n'est pas assignee : le modele
-    # devient sur-contraint et renvoie INFEASIBLE (ou un planning faux) sur les
-    # gros jeux de donnees. Avant : constante fixe 10000, alors que l'horizon
-    # depasse 100000 sur un dataset de 100 pieces.
-    M_big  = horizon
+    # ── Index ─────────────────────────────────────────────────────────────────
+    all_ops  = sorted({o for (o, m) in modes})
+    all_mchs = sorted({m for (o, m) in modes})
 
-    # ── Index utiles ──────────────────────────────────────────────────────────
-    all_ops   = list(set(o for (o, m) in modes))
-    all_mchs  = list(set(m for (o, m) in modes))
-    all_techs = list(set(t for (t, m) in grp_mchs))
-
-    ops_modes_map  = {o: [m for (o2, m) in modes if o2 == o] for o in all_ops}
-    ops_on_mch_map = {m: [o for (o, m2) in modes if m2 == m] for m in all_mchs}
-    tech_mchs_map  = {t: [m for (t2, m) in grp_mchs if t2 == t] for t in all_techs}
-    mch_tech_map   = {m: [t for (t, m2) in grp_mchs if m2 == m] for m in all_mchs}
-
-    # ── Variables ─────────────────────────────────────────────────────────────
-    s, e, x = {}, {}, {}
+    ops_modes_map  = {o: [] for o in all_ops}
+    ops_on_mch_map = {m: [] for m in all_mchs}
     for (o, m) in modes:
-        s[o, m] = model.NewIntVar(0, horizon, f's_{o}_{m}')
-        e[o, m] = model.NewIntVar(0, horizon, f'e_{o}_{m}')
-        x[o, m] = model.NewBoolVar(f'x_{o}_{m}')
+        ops_modes_map[o].append(m)
+        ops_on_mch_map[m].append(o)
 
-    # z[o1,o2,m] — o1 avant o2 sur machine m
-    z = {}
-    for m in all_mchs:
-        ops = ops_on_mch_map[m]
-        for i, o1 in enumerate(ops):
-            for o2 in ops[i+1:]:
-                z[o1, o2, m] = model.NewBoolVar(f'z_{o1}_{o2}_{m}')
-                z[o2, o1, m] = model.NewBoolVar(f'z_{o2}_{o1}_{m}')
+    mch_tech_map: dict[int, list[int]] = {m: [] for m in all_mchs}
+    for (t, m) in grp_mchs:
+        if m in mch_tech_map:
+            mch_tech_map[m].append(t)
 
-    # K[t,o1,o2] — o1 avant o2 pour technicien t
-    K = {}
-    for t in all_techs:
-        mchs_t = tech_mchs_map[t]
-        ops_t  = list(set(o for m in mchs_t for o in ops_on_mch_map.get(m, [])))
-        for i, o1 in enumerate(ops_t):
-            for o2 in ops_t[i+1:]:
-                K[t, o1, o2] = model.NewBoolVar(f'K_{t}_{o1}_{o2}')
-                K[t, o2, o1] = model.NewBoolVar(f'K_{t}_{o2}_{o1}')
-
-    # tfs[t,o,m] — temps fin setup technicien t pour op o sur machine m
-    tfs = {}
-    for (t, m_tech) in grp_mchs:
-        for o in ops_on_mch_map.get(m_tech, []):
-            tfs[t, o, m_tech] = model.NewIntVar(0, horizon, f'tfs_{t}_{o}_{m_tech}')
-
-    # ── C1 : chaque opération assignée à exactement une machine ───────────────
+    # Techniciens pouvant intervenir sur une operation = techniciens de ses
+    # machines candidates.
+    op_techs: dict[int, set[int]] = {}
     for o in all_ops:
-        model.Add(sum(x[o, m] for m in ops_modes_map[o]) == 1)
+        techs = set()
+        for m in ops_modes_map[o]:
+            techs.update(mch_tech_map.get(m, []))
+        op_techs[o] = techs
 
-    # ── C2 : fin = début + durée si op assignée ───────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # VARIABLES
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Debut et fin PAR OPERATION (et non par mode) : c'est ce qui fait tomber
+    # la precedence de O(modes x modes) a O(1) par arc de gamme.
+    S, E, S_bloc = {}, {}, {}
+    for o in all_ops:
+        S[o]      = model.NewIntVar(0, horizon, f'S_{o}')
+        E[o]      = model.NewIntVar(0, horizon, f'E_{o}')
+        S_bloc[o] = model.NewIntVar(0, horizon, f'Sb_{o}')
+        # Le bloc machine commence cte avant le debut de l'operation.
+        model.Add(S_bloc[o] == S[o] - cte)
+
+    x = {}
+    intervalles_machine: dict[int, list] = {m: [] for m in all_mchs}
     for (o, m) in modes:
-        model.Add(e[o, m] >= s[o, m] + pt.get((o, m), 0) * x[o, m])
+        x[o, m] = model.NewBoolVar(f'x_{o}_{m}')
+        duree = int(pt.get((o, m), 0))
+        # C2 + C7 : l'intervalle occupe la machine de S - cte a E, soit le
+        # temps de setup reserve puis le temps operatoire.
+        intervalles_machine[m].append(
+            model.NewOptionalIntervalVar(
+                S_bloc[o], cte + duree, E[o], x[o, m], f'bloc_{o}_{m}'
+            )
+        )
 
-    # ── C3 : précédence dans le job ───────────────────────────────────────────
-    job_ops = {}
-    for (op_id, job_id, pos) in gammes:
-        if job_id not in job_ops:
-            job_ops[job_id] = []
-        job_ops[job_id].append((op_id, pos))
+    # Setup par technicien.
+    #
+    # Le setup occupe exactement le creneau [S - cte, S], c'est-a-dire le prefixe
+    # du bloc machine. C'est ce qui reproduit la contrainte C7 de la v1 : comme
+    # ce creneau fait partie du bloc soumis a AddNoOverlap, le setup d'une
+    # operation ne peut pas commencer avant la fin de l'operation precedente sur
+    # la meme machine.
+    #
+    # Une premiere version laissait le setup flotter librement avant S. Elle
+    # produisait des plannings ou le technicien preparait l'operation suivante
+    # pendant que la machine tournait encore — un relachement par rapport a la
+    # v1, qui faussait la comparaison. Le creneau est donc fixe.
+    presence_tech = {}
+    intervalles_tech: dict[int, list] = {}
+    for o in all_ops:
+        for t in op_techs[o]:
+            machines_communes = [m for m in ops_modes_map[o]
+                                 if t in mch_tech_map.get(m, [])]
+            if not machines_communes:
+                continue
 
-    for job_id, ops_list in job_ops.items():
-        ops_sorted = sorted(ops_list, key=lambda x: x[1])
-        for i in range(len(ops_sorted) - 1):
-            o1, _ = ops_sorted[i]
-            o2, _ = ops_sorted[i + 1]
-            for m1 in ops_modes_map[o1]:
-                for m2 in ops_modes_map[o2]:
-                    # Si o1 assigné à m1 ET o2 assigné à m2 :
-                    # o2 commence après la fin de o1
-                    model.Add(
-                        s[o2, m2] >= e[o1, m1]
-                        - M_big * (1 - x[o1, m1])
-                        - M_big * (1 - x[o2, m2])
-                    )
+            u = model.NewBoolVar(f'u_{t}_{o}')
+            presence_tech[t, o] = u
+            # u <=> l'operation est affectee a une machine couverte par t
+            model.Add(sum(x[o, m] for m in machines_communes) == 1).OnlyEnforceIf(u)
+            model.Add(sum(x[o, m] for m in machines_communes) == 0).OnlyEnforceIf(u.Not())
 
-    # ── C4 : début op >= fin setup technicien ────────────────────────────────
-    for (o, m) in modes:
-        for t in mch_tech_map.get(m, []):
-            if (t, o, m) in tfs:
-                model.Add(
-                    s[o, m] >= tfs[t, o, m] - M_big * (1 - x[o, m])
+            intervalles_tech.setdefault(t, []).append(
+                model.NewOptionalIntervalVar(
+                    S_bloc[o], cte, S[o], u, f'setup_{t}_{o}'
                 )
+            )
 
-    # ── C5 : setup >= cte (si op assignée) ───────────────────────────────────
-    for (t, o, m) in tfs:
-        model.Add(tfs[t, o, m] >= cte).OnlyEnforceIf(x[o, m])
+    # ══════════════════════════════════════════════════════════════════════════
+    # CONTRAINTES
+    # ══════════════════════════════════════════════════════════════════════════
 
-    # ── C6 : début >= cte (si op assignée) ───────────────────────────────────
+    # ── C1 : une operation sur exactement une machine ─────────────────────────
+    for o in all_ops:
+        model.AddExactlyOne(x[o, m] for m in ops_modes_map[o])
+
+    # ── C6 : aucun demarrage avant le setup initial ───────────────────────────
+    for o in all_ops:
+        model.Add(S[o] >= cte)
+
+    # ── C6bis : disponibilite initiale de la machine ──────────────────────────
     for (o, m) in modes:
-        model.Add(s[o, m] >= cte).OnlyEnforceIf(x[o, m])
+        pret = machine_ready_times.get(m, 0)
+        if pret > 0:
+            model.Add(S[o] >= pret + cte).OnlyEnforceIf(x[o, m])
 
-    # ── C6bis : continuité selon disponibilité machine ───────────────────────
-    for (o, m) in modes:
-        ready_time = machine_ready_times.get(m, 0)
-        if ready_time > 0:
-            model.Add(s[o, m] >= ready_time + cte).OnlyEnforceIf(x[o, m])
-
-    # ── C7 : non-chevauchement + setup sur même machine ──────────────────────
+    # ── C7 : machine — non-chevauchement + cte entre deux operations ──────────
     for m in all_mchs:
-        ops     = ops_on_mch_map[m]
-        techs_m = mch_tech_map.get(m, [])
-        for i, o1 in enumerate(ops):
-            for o2 in ops[i+1:]:
-                if (o1, o2, m) not in z or (o2, o1, m) not in z:
+        if len(intervalles_machine[m]) > 1:
+            model.AddNoOverlap(intervalles_machine[m])
+
+    # ── C8 : technicien — les setups ne se chevauchent pas ────────────────────
+    for t, intervalles in intervalles_tech.items():
+        if len(intervalles) > 1:
+            model.AddNoOverlap(intervalles)
+
+    # C4 (debut apres la fin du setup) et C5 (setup >= cte) sont desormais
+    # portees par la geometrie du creneau [S - cte, S] et par S >= cte.
+
+    # ── C3 : precedence des operations d'une meme piece ───────────────────────
+    ops_par_job: dict[int, list] = {}
+    for (op_id, job_id, pos) in gammes:
+        ops_par_job.setdefault(int(job_id), []).append((int(pos), int(op_id)))
+
+    arcs_gamme = []
+    for job_id, sequence in ops_par_job.items():
+        sequence.sort()
+        for (_, o1), (_, o2) in zip(sequence, sequence[1:]):
+            if o1 in S and o2 in S:
+                model.Add(S[o2] >= E[o1])
+                arcs_gamme.append((o1, o2))
+
+    # ── C9 : setup du successeur de gamme sur une autre machine ───────────────
+    #
+    # v1 : tfs[t,o2,m2] >= cte + pt[o1,m1] + tfs[t,o1,m1]
+    # Avec le setup cale sur [S - cte, S], tfs[t,o] vaut S[o] et pt[o1,m1] vaut
+    # E[o1] - S[o1], donc la contrainte devient S[o2] >= E[o1] + cte : un
+    # technicien qui suit une piece d'une machine a l'autre a besoin de cte
+    # entre la fin d'une operation et le debut de la suivante.
+    for (o1, o2) in arcs_gamme:
+        for m1 in ops_modes_map[o1]:
+            techs_m1 = set(mch_tech_map.get(m1, []))
+            for m2 in ops_modes_map[o2]:
+                if m1 == m2:
                     continue
-
-                # Exactement un ordre si les deux ops assignées à m
-                model.Add(
-                    z[o1, o2, m] + z[o2, o1, m] >= x[o1, m] + x[o2, m] - 1
-                )
-                model.Add(
-                    z[o1, o2, m] + z[o2, o1, m] <= 1
-                )
-
-                # z actif seulement si les deux ops sur m
-                model.Add(z[o1, o2, m] <= x[o1, m])
-                model.Add(z[o1, o2, m] <= x[o2, m])
-                model.Add(z[o2, o1, m] <= x[o1, m])
-                model.Add(z[o2, o1, m] <= x[o2, m])
-
-                # Non-chevauchement avec setup pour chaque technicien de m
-                for t in techs_m:
-                    if (t, o2, m) in tfs:
-                        model.Add(
-                            tfs[t, o2, m] >= cte + e[o1, m]
-                            - M_big * (1 - z[o1, o2, m])
-                        )
-                    if (t, o1, m) in tfs:
-                        model.Add(
-                            tfs[t, o1, m] >= cte + e[o2, m]
-                            - M_big * (1 - z[o2, o1, m])
-                        )
-
-    # ── C8 : setup consécutifs par même technicien sur machines différentes ───
-    for t in all_techs:
-        mchs_t = tech_mchs_map[t]
-        ops_t  = list(set(o for m in mchs_t for o in ops_on_mch_map.get(m, [])))
-
-        for i, o1 in enumerate(ops_t):
-            for o2 in ops_t[i+1:]:
-                if (t, o1, o2) not in K:
+                # v1 n'appliquait C9 que si un technicien couvrait les deux
+                # machines : on garde exactement la meme condition.
+                if not techs_m1 & set(mch_tech_map.get(m2, [])):
                     continue
-
-                x_o1_on_t = [x[o1, m] for m in mchs_t if (o1, m) in x]
-                x_o2_on_t = [x[o2, m] for m in mchs_t if (o2, m) in x]
-
-                if not x_o1_on_t or not x_o2_on_t:
-                    continue
-
-                active_o1  = model.NewBoolVar(f'active_{t}_{o1}')
-                active_o2  = model.NewBoolVar(f'active_{t}_{o2}')
-                both_active = model.NewBoolVar(f'both_{t}_{o1}_{o2}')
-
-                model.Add(sum(x_o1_on_t) >= 1).OnlyEnforceIf(active_o1)
-                model.Add(sum(x_o1_on_t) == 0).OnlyEnforceIf(active_o1.Not())
-                model.Add(sum(x_o2_on_t) >= 1).OnlyEnforceIf(active_o2)
-                model.Add(sum(x_o2_on_t) == 0).OnlyEnforceIf(active_o2.Not())
-
-                model.AddBoolAnd([active_o1, active_o2]).OnlyEnforceIf(both_active)
-                model.AddBoolOr([active_o1.Not(), active_o2.Not()]).OnlyEnforceIf(both_active.Not())
-
-                # Exactement un ordre si les deux actives
-                model.Add(K[t, o1, o2] + K[t, o2, o1] == 1).OnlyEnforceIf(both_active)
-                model.Add(K[t, o1, o2] == 0).OnlyEnforceIf(both_active.Not())
-                model.Add(K[t, o2, o1] == 0).OnlyEnforceIf(both_active.Not())
-
-                # Propagation du setup entre machines différentes
-                for m1 in mchs_t:
-                    for m2 in mchs_t:
-                        if m1 == m2:
-                            continue
-                        if (t, o1, m1) in tfs and (t, o2, m2) in tfs:
-                            model.Add(
-                                tfs[t, o2, m2] >= cte + tfs[t, o1, m1]
-                                - M_big * (1 - K[t, o1, o2])
-                                - M_big * (1 - x[o1, m1])
-                                - M_big * (1 - x[o2, m2])
-                            )
-                        if (t, o2, m2) in tfs and (t, o1, m1) in tfs:
-                            model.Add(
-                                tfs[t, o1, m1] >= cte + tfs[t, o2, m2]
-                                - M_big * (1 - K[t, o2, o1])
-                                - M_big * (1 - x[o2, m2])
-                                - M_big * (1 - x[o1, m1])
-                            )
-
-    # ── C9 : setup entre opérations successives du même job ──────────────────
-    for job_id, ops_list in job_ops.items():
-        ops_sorted = sorted(ops_list, key=lambda x: x[1])
-        for i in range(len(ops_sorted) - 1):
-            o1, _ = ops_sorted[i]
-            o2, _ = ops_sorted[i + 1]
-            for m1 in ops_modes_map[o1]:
-                for m2 in ops_modes_map[o2]:
-                    if m1 == m2:
-                        continue
-                    for t in mch_tech_map.get(m2, []):
-                        if (t, o2, m2) in tfs and (t, o1, m1) in tfs:
-                            model.Add(
-                                tfs[t, o2, m2] >= cte + pt.get((o1, m1), 0) + tfs[t, o1, m1]
-                                - M_big * (1 - x[o1, m1])
-                                - M_big * (1 - x[o2, m2])
-                            )
-
-    # ── C10 : fin op >= durée + tfs ───────────────────────────────────────────
-    for (o, m) in modes:
-        for t in mch_tech_map.get(m, []):
-            if (t, o, m) in tfs:
                 model.Add(
-                    e[o, m] >= pt.get((o, m), 0) + tfs[t, o, m]
-                    - M_big * (1 - x[o, m])
-                )
+                    S[o2] >= E[o1] + cte
+                ).OnlyEnforceIf([x[o1, m1], x[o2, m2]])
 
-    # ── Objectif : minimiser le makespan ─────────────────────────────────────
+    # ── Objectif : minimiser le makespan ──────────────────────────────────────
     makespan = model.NewIntVar(0, horizon, 'makespan')
-    for (o, m) in modes:
-        model.Add(makespan >= e[o, m] - M_big * (1 - x[o, m]))
+    model.AddMaxEquality(makespan, [E[o] for o in all_ops])
     model.Minimize(makespan)
 
-    # ── Résolution ────────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # RESOLUTION
+    # ══════════════════════════════════════════════════════════════════════════
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max_time_seconds
     solver.parameters.num_search_workers = max(1, int(num_search_workers))
@@ -263,30 +237,54 @@ def solve_flexible_jobshop(
 
     status = solver.Solve(model)
 
-    if status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise ValueError(f"Pas de solution trouvée. Status: {solver.StatusName(status)}")
 
-    # ── Extraction des résultats ──────────────────────────────────────────────
-    rows = []
-    for (o, m) in modes:
-        if solver.Value(x[o, m]) == 1:
-            start  = solver.Value(s[o, m])
-            end    = solver.Value(e[o, m])
-            dur    = pt.get((o, m), 0)
-            job_id = next((g[1] for g in gammes if g[0] == o), 0)
-            rows.append({
-                'OperationID':    o,
-                'MachineID':      m,
-                'MachineLabel':   f'Machine {m}',
-                'JobID':          job_id,
-                'JobLabel':       f'Job {job_id}',
-                'StartTime':      start,
-                'EndTime':        end,
-                'Duration':       dur,
-                'ProcessingTime': dur,
-            })
+    # ── Extraction ────────────────────────────────────────────────────────────
+    job_de_op = {int(g[0]): int(g[1]) for g in gammes}
 
-    df = pd.DataFrame(rows).sort_values(['JobID', 'StartTime']).reset_index(drop=True)
-    print(f"Makespan : {solver.ObjectiveValue()} min")
+    lignes = []
+    for (o, m) in modes:
+        if solver.Value(x[o, m]) != 1:
+            continue
+        debut = solver.Value(S[o])
+        fin   = solver.Value(E[o])
+        duree = int(pt.get((o, m), 0))
+        job_id = job_de_op.get(o, 0)
+        lignes.append({
+            'OperationID':    o,
+            'MachineID':      m,
+            'MachineLabel':   f'Machine {m}',
+            'JobID':          job_id,
+            'JobLabel':       f'Job {job_id}',
+            'StartTime':      debut,
+            'EndTime':        fin,
+            'Duration':       duree,
+            'ProcessingTime': duree,
+        })
+
+    df = (pd.DataFrame(lignes)
+          .sort_values(['JobID', 'StartTime'])
+          .reset_index(drop=True))
+
+    # ── Ecart a l'optimum ─────────────────────────────────────────────────────
+    # Un planning valide n'est pas forcement un bon planning. CP-SAT connait
+    # une borne inferieure sur le makespan : aucune solution ne peut faire
+    # mieux. L'ecart entre la solution trouvee et cette borne dit de combien
+    # on peut encore esperer progresser — 0 % signifie optimum prouve.
+    valeur = solver.ObjectiveValue()
+    borne = solver.BestObjectiveBound()
+    ecart = (valeur - borne) / valeur if valeur > 0 else 0.0
+
+    df.attrs.update({
+        "makespan": int(valeur),
+        "borne_inferieure": int(borne),
+        "ecart_optimalite": float(ecart),
+        "statut": solver.StatusName(status),
+        "secondes": float(solver.WallTime()),
+    })
+
+    print(f"Makespan : {valeur} min")
+    print(f"Borne    : {borne} min  (ecart {ecart:.1%})")
     print(f"Status   : {solver.StatusName(status)}")
     return df
