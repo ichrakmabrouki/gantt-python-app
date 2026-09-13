@@ -91,273 +91,13 @@ st.set_page_config(
     page_icon=str(ICON_DIR / "icon-streamlit.png"),
 )
 
-# ── Verrou partagé entre toutes les sessions ───────────────────────────────
-# st.cache_resource renvoie le MÊME objet à tous les visiteurs du conteneur :
-# c'est ce qui permet de sérialiser les résolutions sur un hébergement partagé.
-@st.cache_resource
-def _verrou_solveur() -> threading.Lock:
-    return threading.Lock()
-
-
-# ── Gestion des cookies de session ─────────────────────────────────────────
-cookie_manager = stx.CookieManager()
-
-# CookieManager.set() et .delete() creent chacun un composant Streamlit dont la
-# cle vaut par defaut "set" et "delete". Streamlit exige une cle UNIQUE par
-# element dans un meme run : deux ecritures de cookie dans le meme passage du
-# script levent StreamlitDuplicateElementKey. C'est exactement ce qui arrive a
-# la connexion (clear_auth_session ecrit 4 cookies, puis on pose le nouveau).
-#
-# Ce compteur est remis a zero a chaque run (app.py est reexecute de haut en
-# bas par Streamlit), ce qui donne une cle unique et stable a chaque appel.
-_cookie_ops = 0
-
-
-def _cookie_key(action: str) -> str:
-    global _cookie_ops
-    _cookie_ops += 1
-    return f"cookie_{action}_{_cookie_ops}"
-
-
-def cookie_set(name: str, value: str, expires_at: datetime) -> None:
-    try:
-        cookie_manager.set(name, value, expires_at=expires_at,
-                           key=_cookie_key("set"))
-    except Exception:
-        pass
-
-
-def cookie_delete(name: str) -> None:
-    try:
-        cookie_manager.delete(name, key=_cookie_key("del"))
-    except Exception:
-        pass
-
-# ── Initialisation session state ───────────────────────────────────────────
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-if "SID" not in st.session_state:
-    st.session_state["SID"] = None
-if "user_role" not in st.session_state:
-    st.session_state["user_role"] = None
-if "force_login" not in st.session_state:
-    st.session_state["force_login"] = False
-
-
-def clear_auth_session() -> None:
-    expired_at = datetime.now() - timedelta(days=1)
-    for cookie_name in ("gantt_session", "gantt_user"):
-        cookie_delete(cookie_name)
-        cookie_set(cookie_name, "", expired_at)
-
-    keep_force_login = st.session_state.get("force_login", False)
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.session_state["force_login"] = keep_force_login
-
-# ── Vérifie le cookie existant ─────────────────────────────────────────────
-session_cookie = cookie_manager.get("gantt_session")
-legacy_cookie = cookie_manager.get("gantt_user")
-
-if st.session_state.get("force_login"):
-    cookie_delete("gantt_session")
-    cookie_delete("gantt_user")
-    session_cookie = None
-    legacy_cookie = None
-
-if session_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
-    username = verify_session_token(session_cookie)
-    if username:
-        try:
-            user = get_user(username)
-        except DatabaseUnavailable as exc:
-            # Base injoignable : on NE supprime surtout PAS le cookie, sinon
-            # une simple pause Supabase deconnecte definitivement tout le
-            # monde. La session reprendra des que la base repond.
-            user = None
-            st.session_state["db_error"] = str(exc)
-
-        if user:
-            st.session_state["authenticated"] = True
-            st.session_state["SID"] = username
-            st.session_state["user_role"] = user.get("role", "user")
-
-            # ── Renouvellement glissant (equivalent refresh token) ─────────
-            # Le token est reemis quand il approche de l'expiration, une
-            # seule fois par session Streamlit.
-            if (should_refresh_session_token(session_cookie)
-                    and not st.session_state.get("session_refreshed")):
-                st.session_state["session_refreshed"] = True
-                cookie_set(
-                    "gantt_session",
-                    create_session_token(username),
-                    datetime.now() + timedelta(days=SESSION_DURATION_DAYS),
-                )
-        elif not st.session_state.get("db_error"):
-            cookie_delete("gantt_session")
-    else:
-        cookie_delete("gantt_session")
-
-if legacy_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
-    try:
-        user = get_user(legacy_cookie)
-    except DatabaseUnavailable as exc:
-        user = None
-        st.session_state["db_error"] = str(exc)
-
-    if user:
-        st.session_state["authenticated"] = True
-        st.session_state["SID"] = legacy_cookie.strip().lower()
-        st.session_state["user_role"] = user.get("role", "user")
-        cookie_set(
-            "gantt_session",
-            create_session_token(st.session_state["SID"]),
-            datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
-        )
-    if not st.session_state.get("db_error"):
-        cookie_delete("gantt_user")
-
-# ── Page de connexion ──────────────────────────────────────────────────────
-if not st.session_state["authenticated"]:
-
-    st.markdown(BANDEAU_RESEAU, unsafe_allow_html=True)
-    st.markdown("""
-    <div class="login-hero">
-        <p class="login-kicker">Atelier mecanique</p>
-        <h1>Gantt Dashboard</h1>
-        <p>Planification, suivi de charge, KPI et historiques de production dans un espace securise.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Bandeau si la reprise de session a echoue parce que la base est HS —
-    # evite de laisser croire a un probleme d'identifiants.
-    if st.session_state.get("db_error"):
-        st.error(st.session_state.pop("db_error"))
-
-    tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
-
-    with tab_login:
-        with st.form("login_form"):
-            username_input = st.text_input("Identifiant")
-            password_input = st.text_input("Mot de passe", type="password")
-            submit_login = st.form_submit_button("Se connecter")
-
-        if submit_login:
-            u = username_input.strip().lower()
-            p = password_input.strip()
-
-            if not u or not p:
-                st.error("Identifiant et mot de passe obligatoires")
-            else:
-                db_error = None
-                try:
-                    user = get_user(u)
-                except DatabaseUnavailable as exc:
-                    user = None
-                    db_error = str(exc)
-
-                if db_error:
-                    st.error(db_error)
-
-                elif user and verify_password(p, user.get("password")):
-                    clear_auth_session()
-                    st.session_state["authenticated"] = True
-                    st.session_state["SID"] = u
-                    st.session_state["user_role"] = user.get("role", "user")
-                    st.session_state["force_login"] = False
-
-                    if needs_password_rehash(user.get("password")):
-                        update_user_password_hash(u, hash_password(p))
-
-                    cookie_set(
-                        "gantt_session",
-                        create_session_token(u),
-                        datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
-                    )
-                    cookie_delete("gantt_user")
-
-                    st.success("Connexion réussie")
-                    st.rerun()
-                else:
-                    st.error("Identifiant ou mot de passe incorrect")
-
-    with tab_register:
-        with st.form("register_form"):
-            new_user  = st.text_input("Nouvel identifiant")
-            new_pass  = st.text_input("Mot de passe", type="password")
-            new_pass2 = st.text_input("Confirmer le mot de passe", type="password")
-            submit_register = st.form_submit_button("Créer le compte")
-
-        if submit_register:
-            u = new_user.strip().lower()
-            p = new_pass.strip()
-            p2 = new_pass2.strip()
-
-            if not u or not p or not p2:
-                st.error("Identifiant et mot de passe obligatoires")
-
-            elif p != p2:
-                st.error("Les mots de passe ne correspondent pas")
-
-            elif len(p) < 8:
-                st.error("Mot de passe trop court (min 8 caractères)")
-
-            elif not any(ch.isalpha() for ch in p) or not any(ch.isdigit() for ch in p):
-                st.error("Le mot de passe doit contenir au moins une lettre et un chiffre")
-
-            else:
-                ok, msg = create_user(u, p)
-
-                if ok:
-                    st.success(f"Compte '{u}' créé — connecte-toi maintenant")
-                else:
-                    st.error(msg)
-
-    st.stop()
-
-# ── SID récupéré après authentification ───────────────────────────────────
-SID = st.session_state.get("SID")
-
-
-def _request_context() -> tuple[str | None, str | None]:
-    try:
-        headers = st.context.headers
-    except Exception:
-        headers = {}
-
-    def header(name: str) -> str | None:
-        try:
-            return headers.get(name)
-        except Exception:
-            return None
-
-    user_agent = header("user-agent")
-    host = header("host") or header("x-forwarded-host")
-    proto = header("x-forwarded-proto") or "https"
-    app_url = f"{proto}://{host}" if host else None
-    return app_url, user_agent
-
-
-if SID and not st.session_state.get("access_logged"):
-    app_url, user_agent = _request_context()
-    source = st.query_params.get("src") or st.query_params.get("source") or "direct"
-    log_app_access(
-        username=SID,
-        event="visit",
-        page="app",
-        app_url=app_url,
-        user_agent=user_agent,
-        source=source,
-    )
-    st.session_state["access_logged"] = True
-
-if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
-    with st.sidebar:
-        if st.button("Effacer ma session admin", key="debug_clear_cookie"):
-            st.session_state["force_login"] = True
-            clear_auth_session()
-            st.rerun()
-
+# ══════════════════════════════════════════════════════════════════════════════
+# L'HABILLAGE EST INJECTE ICI, AVANT TOUT LE RESTE
+# ══════════════════════════════════════════════════════════════════════════════
+# Il etait injecte plus bas, apres le bloc d'authentification. Or la page de
+# connexion se termine par st.stop() : elle n'atteignait donc JAMAIS ces lignes
+# et s'affichait sans aucun style — ni palette, ni polices, ni reseau anime.
+# Une feuille de style doit etre posee avant que quoi que ce soit ne soit rendu.
 # ══════════════════════════════════════════════════════════════════════════════
 # CSS — THÈME INDUSTRIEL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1127,6 +867,275 @@ st.markdown(css_reseau(), unsafe_allow_html=True)
 # prevue pour le tactile, et la taille des champs repassait sous 16 px, ce qui
 # declenche le zoom automatique de l'iPhone a chaque saisie.
 st.markdown(CSS_MOBILE, unsafe_allow_html=True)
+
+
+# ── Verrou partagé entre toutes les sessions ───────────────────────────────
+# st.cache_resource renvoie le MÊME objet à tous les visiteurs du conteneur :
+# c'est ce qui permet de sérialiser les résolutions sur un hébergement partagé.
+@st.cache_resource
+def _verrou_solveur() -> threading.Lock:
+    return threading.Lock()
+
+
+# ── Gestion des cookies de session ─────────────────────────────────────────
+cookie_manager = stx.CookieManager()
+
+# CookieManager.set() et .delete() creent chacun un composant Streamlit dont la
+# cle vaut par defaut "set" et "delete". Streamlit exige une cle UNIQUE par
+# element dans un meme run : deux ecritures de cookie dans le meme passage du
+# script levent StreamlitDuplicateElementKey. C'est exactement ce qui arrive a
+# la connexion (clear_auth_session ecrit 4 cookies, puis on pose le nouveau).
+#
+# Ce compteur est remis a zero a chaque run (app.py est reexecute de haut en
+# bas par Streamlit), ce qui donne une cle unique et stable a chaque appel.
+_cookie_ops = 0
+
+
+def _cookie_key(action: str) -> str:
+    global _cookie_ops
+    _cookie_ops += 1
+    return f"cookie_{action}_{_cookie_ops}"
+
+
+def cookie_set(name: str, value: str, expires_at: datetime) -> None:
+    try:
+        cookie_manager.set(name, value, expires_at=expires_at,
+                           key=_cookie_key("set"))
+    except Exception:
+        pass
+
+
+def cookie_delete(name: str) -> None:
+    try:
+        cookie_manager.delete(name, key=_cookie_key("del"))
+    except Exception:
+        pass
+
+# ── Initialisation session state ───────────────────────────────────────────
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "SID" not in st.session_state:
+    st.session_state["SID"] = None
+if "user_role" not in st.session_state:
+    st.session_state["user_role"] = None
+if "force_login" not in st.session_state:
+    st.session_state["force_login"] = False
+
+
+def clear_auth_session() -> None:
+    expired_at = datetime.now() - timedelta(days=1)
+    for cookie_name in ("gantt_session", "gantt_user"):
+        cookie_delete(cookie_name)
+        cookie_set(cookie_name, "", expired_at)
+
+    keep_force_login = st.session_state.get("force_login", False)
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state["force_login"] = keep_force_login
+
+# ── Vérifie le cookie existant ─────────────────────────────────────────────
+session_cookie = cookie_manager.get("gantt_session")
+legacy_cookie = cookie_manager.get("gantt_user")
+
+if st.session_state.get("force_login"):
+    cookie_delete("gantt_session")
+    cookie_delete("gantt_user")
+    session_cookie = None
+    legacy_cookie = None
+
+if session_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
+    username = verify_session_token(session_cookie)
+    if username:
+        try:
+            user = get_user(username)
+        except DatabaseUnavailable as exc:
+            # Base injoignable : on NE supprime surtout PAS le cookie, sinon
+            # une simple pause Supabase deconnecte definitivement tout le
+            # monde. La session reprendra des que la base repond.
+            user = None
+            st.session_state["db_error"] = str(exc)
+
+        if user:
+            st.session_state["authenticated"] = True
+            st.session_state["SID"] = username
+            st.session_state["user_role"] = user.get("role", "user")
+
+            # ── Renouvellement glissant (equivalent refresh token) ─────────
+            # Le token est reemis quand il approche de l'expiration, une
+            # seule fois par session Streamlit.
+            if (should_refresh_session_token(session_cookie)
+                    and not st.session_state.get("session_refreshed")):
+                st.session_state["session_refreshed"] = True
+                cookie_set(
+                    "gantt_session",
+                    create_session_token(username),
+                    datetime.now() + timedelta(days=SESSION_DURATION_DAYS),
+                )
+        elif not st.session_state.get("db_error"):
+            cookie_delete("gantt_session")
+    else:
+        cookie_delete("gantt_session")
+
+if legacy_cookie and not st.session_state["authenticated"] and not st.session_state.get("force_login"):
+    try:
+        user = get_user(legacy_cookie)
+    except DatabaseUnavailable as exc:
+        user = None
+        st.session_state["db_error"] = str(exc)
+
+    if user:
+        st.session_state["authenticated"] = True
+        st.session_state["SID"] = legacy_cookie.strip().lower()
+        st.session_state["user_role"] = user.get("role", "user")
+        cookie_set(
+            "gantt_session",
+            create_session_token(st.session_state["SID"]),
+            datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
+        )
+    if not st.session_state.get("db_error"):
+        cookie_delete("gantt_user")
+
+# ── Page de connexion ──────────────────────────────────────────────────────
+if not st.session_state["authenticated"]:
+
+    st.markdown(BANDEAU_RESEAU, unsafe_allow_html=True)
+    st.markdown("""
+    <div class="login-hero">
+        <p class="login-kicker">Atelier mecanique</p>
+        <h1>Gantt Dashboard</h1>
+        <p>Planification, suivi de charge, KPI et historiques de production dans un espace securise.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Bandeau si la reprise de session a echoue parce que la base est HS —
+    # evite de laisser croire a un probleme d'identifiants.
+    if st.session_state.get("db_error"):
+        st.error(st.session_state.pop("db_error"))
+
+    tab_login, tab_register = st.tabs(["SE CONNECTER", "CRÉER UN COMPTE"])
+
+    with tab_login:
+        with st.form("login_form"):
+            username_input = st.text_input("Identifiant")
+            password_input = st.text_input("Mot de passe", type="password")
+            submit_login = st.form_submit_button("Se connecter")
+
+        if submit_login:
+            u = username_input.strip().lower()
+            p = password_input.strip()
+
+            if not u or not p:
+                st.error("Identifiant et mot de passe obligatoires")
+            else:
+                db_error = None
+                try:
+                    user = get_user(u)
+                except DatabaseUnavailable as exc:
+                    user = None
+                    db_error = str(exc)
+
+                if db_error:
+                    st.error(db_error)
+
+                elif user and verify_password(p, user.get("password")):
+                    clear_auth_session()
+                    st.session_state["authenticated"] = True
+                    st.session_state["SID"] = u
+                    st.session_state["user_role"] = user.get("role", "user")
+                    st.session_state["force_login"] = False
+
+                    if needs_password_rehash(user.get("password")):
+                        update_user_password_hash(u, hash_password(p))
+
+                    cookie_set(
+                        "gantt_session",
+                        create_session_token(u),
+                        datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
+                    )
+                    cookie_delete("gantt_user")
+
+                    st.success("Connexion réussie")
+                    st.rerun()
+                else:
+                    st.error("Identifiant ou mot de passe incorrect")
+
+    with tab_register:
+        with st.form("register_form"):
+            new_user  = st.text_input("Nouvel identifiant")
+            new_pass  = st.text_input("Mot de passe", type="password")
+            new_pass2 = st.text_input("Confirmer le mot de passe", type="password")
+            submit_register = st.form_submit_button("Créer le compte")
+
+        if submit_register:
+            u = new_user.strip().lower()
+            p = new_pass.strip()
+            p2 = new_pass2.strip()
+
+            if not u or not p or not p2:
+                st.error("Identifiant et mot de passe obligatoires")
+
+            elif p != p2:
+                st.error("Les mots de passe ne correspondent pas")
+
+            elif len(p) < 8:
+                st.error("Mot de passe trop court (min 8 caractères)")
+
+            elif not any(ch.isalpha() for ch in p) or not any(ch.isdigit() for ch in p):
+                st.error("Le mot de passe doit contenir au moins une lettre et un chiffre")
+
+            else:
+                ok, msg = create_user(u, p)
+
+                if ok:
+                    st.success(f"Compte '{u}' créé — connecte-toi maintenant")
+                else:
+                    st.error(msg)
+
+    st.stop()
+
+# ── SID récupéré après authentification ───────────────────────────────────
+SID = st.session_state.get("SID")
+
+
+def _request_context() -> tuple[str | None, str | None]:
+    try:
+        headers = st.context.headers
+    except Exception:
+        headers = {}
+
+    def header(name: str) -> str | None:
+        try:
+            return headers.get(name)
+        except Exception:
+            return None
+
+    user_agent = header("user-agent")
+    host = header("host") or header("x-forwarded-host")
+    proto = header("x-forwarded-proto") or "https"
+    app_url = f"{proto}://{host}" if host else None
+    return app_url, user_agent
+
+
+if SID and not st.session_state.get("access_logged"):
+    app_url, user_agent = _request_context()
+    source = st.query_params.get("src") or st.query_params.get("source") or "direct"
+    log_app_access(
+        username=SID,
+        event="visit",
+        page="app",
+        app_url=app_url,
+        user_agent=user_agent,
+        source=source,
+    )
+    st.session_state["access_logged"] = True
+
+if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
+    with st.sidebar:
+        if st.button("Effacer ma session admin", key="debug_clear_cookie"):
+            st.session_state["force_login"] = True
+            clear_auth_session()
+            st.rerun()
+
 
 # ── Chargement depuis Supabase ─────────────────────────────────────────────────
 if SID and "data" not in st.session_state:
