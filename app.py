@@ -364,7 +364,8 @@ if st.session_state.get("authenticated") and st.session_state.get("user_role") =
 # Toute la feuille ci-dessous n'utilise plus que des var(--...). Changer de
 # mode revient donc à réécrire ce seul bloc :root.
 from backend.ui_theme import (
-    PALETTE, css_variables, CSS_CORRECTIF, CSS_NEO, CSS_MOBILE, BANNIERE_MOBILE,
+    PALETTE, css_variables, css_reseau,
+    CSS_CORRECTIF, CSS_NEO, CSS_MOBILE, BANNIERE_MOBILE,
 )
 
 if "langue" not in st.session_state:
@@ -379,7 +380,6 @@ def t(cle: str) -> str:
     return traduire(cle, LANGUE)
 
 st.markdown(css_variables(), unsafe_allow_html=True)
-st.markdown(CSS_MOBILE, unsafe_allow_html=True)
 
 # ── Couleurs disponibles côté Python ───────────────────────────────────────
 # Les graphiques Plotly ne lisent pas les variables CSS : ils reçoivent des
@@ -1119,6 +1119,13 @@ button, input, textarea, label,
 # ci-dessus ne touchait pas et qui restaient sombres en mode clair.
 st.markdown(CSS_CORRECTIF, unsafe_allow_html=True)
 st.markdown(CSS_NEO, unsafe_allow_html=True)
+st.markdown(css_reseau(), unsafe_allow_html=True)
+# L'adaptation mobile est injectee EN DERNIER, et non avant la feuille
+# principale comme au depart. A specificite egale, c'est la derniere regle qui
+# gagne : la hauteur de 40 px des boutons ecrasait la zone tactile de 44 px
+# prevue pour le tactile, et la taille des champs repassait sous 16 px, ce qui
+# declenche le zoom automatique de l'iPhone a chaque saisie.
+st.markdown(CSS_MOBILE, unsafe_allow_html=True)
 
 # ── Chargement depuis Supabase ─────────────────────────────────────────────────
 if SID and "data" not in st.session_state:
