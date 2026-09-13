@@ -339,7 +339,9 @@ if st.session_state.get("authenticated") and st.session_state.get("user_role") =
 # ── Thème : variables CSS injectées avant la feuille de style ──────────────
 # Toute la feuille ci-dessous n'utilise plus que des var(--...). Changer de
 # mode revient donc à réécrire ce seul bloc :root.
-from backend.ui_theme import css_variables, CSS_MOBILE, BANNIERE_MOBILE
+from backend.ui_theme import (
+    PALETTES, css_variables, css_correctif, CSS_MOBILE, BANNIERE_MOBILE,
+)
 
 if "theme" not in st.session_state:
     st.session_state["theme"] = "sombre"
@@ -356,6 +358,25 @@ def t(cle: str) -> str:
 
 st.markdown(css_variables(st.session_state["theme"]), unsafe_allow_html=True)
 st.markdown(CSS_MOBILE, unsafe_allow_html=True)
+
+# ── Couleurs disponibles côté Python ───────────────────────────────────────
+# Les graphiques Plotly ne lisent pas les variables CSS : ils reçoivent des
+# couleurs en dur. Elles étaient figées en sombre, ce qui donnait des blocs
+# noirs au milieu d'une page blanche, avec un texte gris clair illisible.
+# On sert donc la même palette que la feuille de style.
+PAL         = PALETTES[st.session_state["theme"]]
+G_PAPIER    = PAL["surface"]       # fond de la zone graphique
+G_FOND      = PAL["fond"]          # fond du tracé
+G_TEXTE     = PAL["texte"]
+G_TEXTE_FORT = PAL["texteFort"]
+G_FAIBLE    = PAL["texteFaible"]
+G_GRILLE    = PAL["bordure"]
+G_ACCENT    = PAL["accent3"]   # orange assombri : lisible en texte sur blanc
+G_APLAT     = PAL["accent"]    # orange de marque : reserve aux surfaces pleines
+G_SUCCES    = PAL["succes"]
+G_INFO      = PAL["info"]
+G_ALERTE    = PAL["alerte"]
+G_DANGER    = PAL["danger"]
 
 st.markdown("""
 <style>
@@ -637,7 +658,7 @@ h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
 }
 
 [data-testid="stSidebar"] .stRadio label:hover {
-    background: rgba(255,255,255,0.035) !important;
+    background: var(--voile) !important;
     color: var(--text) !important;
 }
 
@@ -1022,7 +1043,7 @@ button[aria-label*="sidebar" i] svg {
     align-items: center;
     gap: 8px;
     margin: 4px 0 8px;
-    color: rgba(255,255,255,0.42) !important;
+    color: var(--texteFaible) !important;
     font-family: 'Rajdhani', sans-serif !important;
     font-size: 0.68rem !important;
     font-weight: 800 !important;
@@ -1071,6 +1092,11 @@ button, input, textarea, label,
 </style>
 """, unsafe_allow_html=True)
 
+# Injecte en dernier : il reprend les elements habilles par Streamlit lui-meme
+# (menus, info-bulles, tableaux, fleches des champs numeriques), que la feuille
+# ci-dessus ne touchait pas et qui restaient sombres en mode clair.
+st.markdown(css_correctif(st.session_state["theme"]), unsafe_allow_html=True)
+
 # ── Chargement depuis Supabase ─────────────────────────────────────────────────
 if SID and "data" not in st.session_state:
     df_ops = load_operations(SID)
@@ -1118,30 +1144,46 @@ def checkbox_dropdown(
     st.session_state[applied_key] = [
         option for option in st.session_state[applied_key] if option in options
     ]
+
+    def cle_case(idx: int) -> str:
+        return f"{key_prefix}_{idx}_draft"
+
+    # Une case à cocher Streamlit qui porte une `key` ignore son paramètre
+    # `value` dès le second passage : c'est l'état stocké dans session_state
+    # qui fait foi. Cocher « Tout » ne pouvait donc pas rafraîchir les cases
+    # une par une. On écrit désormais directement dans session_state, avant
+    # que les widgets ne soient reconstruits.
+    def synchroniser(selection: list[str]) -> None:
+        for idx, option in enumerate(options):
+            st.session_state[cle_case(idx)] = option in selection
+
+    signature = tuple(options)
+    if st.session_state.get(f"{key_prefix}_signature") != signature:
+        st.session_state[f"{key_prefix}_signature"] = signature
+        synchroniser(st.session_state[applied_key])
+
     selected_count = len(st.session_state[applied_key])
+    total = len(options)
+    tout_est_coche = total > 0 and selected_count == total
 
-    with st.expander(f"{label} ({selected_count}/{len(options)})", expanded=False):
+    with st.expander(f"{label} ({selected_count}/{total})", expanded=False):
+        libelle = "Tout décocher" if tout_est_coche else "Tout cocher"
+        if st.button(libelle, key=f"{key_prefix}_toggle", use_container_width=True):
+            nouvelle = [] if tout_est_coche else list(options)
+            st.session_state[applied_key] = nouvelle
+            synchroniser(nouvelle)
+            st.rerun()
+
         with st.form(f"{key_prefix}_form"):
-            all_selected = selected_count == len(options) and len(options) > 0
-            select_all = st.checkbox("Tout", value=all_selected, key=f"{key_prefix}_all_draft")
-
             selected = []
             option_columns = st.columns(columns)
             for idx, option in enumerate(options):
-                checkbox_key = f"{key_prefix}_{idx}_draft"
-                default_value = option in st.session_state[applied_key]
                 with option_columns[idx % columns]:
-                    if st.checkbox(option, value=default_value, key=checkbox_key):
+                    if st.checkbox(option, key=cle_case(idx)):
                         selected.append(option)
 
-            apply_filter = st.form_submit_button("Appliquer", use_container_width=True)
-            if apply_filter:
-                if select_all and selected_count < len(options):
-                    st.session_state[applied_key] = list(options)
-                elif not select_all and all_selected:
-                    st.session_state[applied_key] = []
-                else:
-                    st.session_state[applied_key] = selected
+            if st.form_submit_button("Appliquer", use_container_width=True):
+                st.session_state[applied_key] = selected
                 st.rerun()
 
     return st.session_state[applied_key]
@@ -1150,8 +1192,8 @@ def checkbox_dropdown(
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
 <p style='font-family:Rajdhani,sans-serif;font-size:0.65rem;font-weight:700;
-   color:rgba(255,255,255,0.25);letter-spacing:3px;text-transform:uppercase;
-   border-bottom:1px solid #30363d;padding-bottom:10px;margin-bottom:8px'>
+   color:var(--texteFaible);letter-spacing:3px;text-transform:uppercase;
+   border-bottom:1px solid var(--bordure);padding-bottom:10px;margin-bottom:8px'>
    """ + icon_img("icon-streamlit.png", 18) + """ NAVIGATION
 </p>""", unsafe_allow_html=True)
 
@@ -1207,8 +1249,8 @@ st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", un
 # ── Statuts ────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("<div style='margin-top:4px'>", unsafe_allow_html=True)
 st.sidebar.markdown(
-    f"<span class='status-badge' style='background:#1a1200;border-color:#ff6b00;"
-    f"color:#ff6b00'>{icon_img('icon-user.png', 16)} {SID}</span>",
+    f"<span class='status-badge status-badge-accent'>"
+    f"{icon_img('icon-user.png', 16)} {SID}</span>",
     unsafe_allow_html=True)
 if "data" in st.session_state:
     st.sidebar.markdown(
@@ -1263,7 +1305,7 @@ st.sidebar.markdown("<hr style='border-color:var(--bordure);margin:16px 0'>", un
 if st.sidebar.button("RÉINITIALISER", key="reset_btn", use_container_width=True):
     clear_all(SID)
     for key in ["data", "df_jobs", "data_kpi", "prix_db", "df_cout",
-                "kpi_params", "of_map", "piece_map"]:
+                "kpi_params", "of_map", "piece_map", "df_profit_affiche"]:
         st.session_state.pop(key, None)
     st.rerun()
 
@@ -1300,7 +1342,7 @@ st.markdown(f"""
     </div>
     <div class="header-date">
         {now.strftime('%A').upper()}<br>
-        <span style="font-size:1rem;font-weight:700;color:#ff6b00">
+        <span style="font-size:1rem;font-weight:700;color:var(--accent)">
             {now.strftime('%d %b %Y').upper()}
         </span><br>
         {now.strftime('%H:%M')}
@@ -1312,10 +1354,10 @@ st.markdown(f"""
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def chart_layout(**kwargs):
     base = dict(
-        paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
-        font=dict(color="#c9d1d9", family="Inter", size=11),
+        paper_bgcolor=G_PAPIER, plot_bgcolor=G_FOND,
+        font=dict(color=G_TEXTE, family="Inter", size=11),
         margin=dict(l=10, r=10, t=30, b=10),
-        yaxis=dict(gridcolor="#21262d"), xaxis=dict(gridcolor="#21262d"),
+        yaxis=dict(gridcolor=G_GRILLE), xaxis=dict(gridcolor=G_GRILLE),
     )
     base.update(kwargs)
     return base
@@ -1504,9 +1546,9 @@ if menu == "Données":
             st.error(f"Impossible de lire le fichier : {e}")
     else:
         st.markdown("""
-        <p style='color:#8b949e;font-size:12px;font-family:Inter,sans-serif'>
+        <p style='color:var(--texteFaible);font-size:12px;font-family:Inter,sans-serif'>
         """ + icon_img("icon-arrow-right.png", 16) + """ Sans fichier uploadé, le solveur utilise les
-        <b style='color:#ff6b00'>données de test intégrées</b>
+        <b style='color:var(--accent)'>données de test intégrées</b>
         (13 pièces · 15 machines · 30 opérations · 6 techniciens · cte=15 min).
         </p>""", unsafe_allow_html=True)
 
@@ -1782,6 +1824,7 @@ elif menu == "Planning":
                 start_time_day=start_time_day,
                 cte=cte_value,
                 x_range=x_range,
+                palette=PAL,
             )
             fig.update_layout(**chart_layout())
             st.plotly_chart(fig, use_container_width=True)
@@ -1890,19 +1933,25 @@ elif menu == "KPI":
 
         with tab2:
             st.markdown("<p class='section-title'>Paramètres de coût</p>", unsafe_allow_html=True)
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                cout_machine_h = st.number_input("COÛT MACHINE (€/H)", min_value=0.0,
-                                                  value=50.0, step=5.0, key="cout_machine")
-            with col2:
-                cout_mo_h = st.number_input("COÛT MAIN-D'ŒUVRE (€/H)", min_value=0.0,
-                                             value=20.0, step=2.0, key="cout_mo")
-            with col3:
-                cout_indirect_h = st.number_input("COÛT INDIRECT (€/H)", min_value=0.0,
-                                                   value=10.0, step=1.0, key="cout_indirect")
-            with col4:
-                prix_matiere_unit = st.number_input("MATIÈRE (€/UNITÉ)", min_value=0.0,
-                                                     value=5.0, step=0.5, key="prix_matiere")
+            # Formulaire : les quatre champs sont saisis puis validés en une
+            # fois. Sans cela, chaque frappe relançait le script entier — tous
+            # les tableaux et graphiques de la page étaient recalculés à chaque
+            # chiffre tapé.
+            with st.form("form_parametres_cout"):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    cout_machine_h = st.number_input("COÛT MACHINE (€/H)", min_value=0.0,
+                                                      value=50.0, step=5.0, key="cout_machine")
+                with col2:
+                    cout_mo_h = st.number_input("COÛT MAIN-D'ŒUVRE (€/H)", min_value=0.0,
+                                                 value=20.0, step=2.0, key="cout_mo")
+                with col3:
+                    cout_indirect_h = st.number_input("COÛT INDIRECT (€/H)", min_value=0.0,
+                                                       value=10.0, step=1.0, key="cout_indirect")
+                with col4:
+                    prix_matiere_unit = st.number_input("MATIÈRE (€/UNITÉ)", min_value=0.0,
+                                                         value=5.0, step=0.5, key="prix_matiere")
+                st.form_submit_button("APPLIQUER LES COÛTS", use_container_width=True)
 
             st.session_state["kpi_params"] = {
                 "cout_machine_h":    cout_machine_h,
@@ -1945,18 +1994,24 @@ elif menu == "KPI":
 
         with tab3:
             st.markdown("<p class='section-title'>Prix de vente par pièce</p>", unsafe_allow_html=True)
-            job_ids   = sorted(df["JobID"].unique())
-            cols_prix = st.columns(min(len(job_ids), 7))
+            job_ids = sorted(df["JobID"].unique())
+            # Même principe que les paramètres de coût : avec trente pièces,
+            # trente champs qui relancent le script à chaque frappe rendent la
+            # saisie inutilisable. Tout est saisi, puis validé une seule fois.
             prix_vente = {}
-            for i, jid in enumerate(job_ids):
-                with cols_prix[i % max(1, min(len(job_ids), 7))]:
-                    saved_val = prix_saved.get(jid, prix_saved.get(str(jid), 10.0))
-                    prix_vente[jid] = st.number_input(
-                        f"P{jid}", min_value=0.0,
-                        value=float(saved_val), step=1.0, key=f"pv_{jid}"
-                    )
+            with st.form("form_prix_vente"):
+                cols_prix = st.columns(min(len(job_ids), 7))
+                for i, jid in enumerate(job_ids):
+                    with cols_prix[i % max(1, min(len(job_ids), 7))]:
+                        saved_val = prix_saved.get(jid, prix_saved.get(str(jid), 10.0))
+                        prix_vente[jid] = st.number_input(
+                            f"P{jid}", min_value=0.0,
+                            value=float(saved_val), step=1.0, key=f"pv_{jid}"
+                        )
+                calculer_profit = st.form_submit_button(
+                    "CALCULER PROFIT & MARGE", use_container_width=True)
 
-            if st.button("CALCULER PROFIT & MARGE"):
+            if calculer_profit:
                 save_prix(prix_vente, SID)
                 st.session_state["prix_db"] = prix_vente
 
@@ -1996,8 +2051,14 @@ elif menu == "KPI":
                     df_profit["Profit (€)"] / df_profit["Revenu (€)"].replace(0, 1) * 100, 1)
 
                 st.session_state["data_kpi"] = df_profit
+                st.session_state["df_profit_affiche"] = df_profit
                 save_kpis(df_profit[["JobLabel", "Duree_min", "Profit (€)", "Marge (%)"]], SID)
 
+            # Le résultat est affiché à partir de la session : il survit donc
+            # aux rechargements de page qui suivent (changement d'onglet,
+            # bascule de thème) au lieu de disparaître au premier rerun.
+            df_profit = st.session_state.get("df_profit_affiche")
+            if df_profit is not None and not df_profit.empty:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("REVENU TOTAL",  f"{df_profit['Revenu (€)'].sum():,.1f} €")
@@ -2006,9 +2067,9 @@ elif menu == "KPI":
                 c4.metric("MARGE MOY.",    f"{df_profit['Marge (%)'].mean():.1f} %")
 
                 def color_marge(val):
-                    if val >= 20:  return "color: #3fb950; font-weight: 700"
-                    elif val >= 0: return "color: #f59e0b; font-weight: 700"
-                    else:          return "color: #f85149; font-weight: 700"
+                    if val >= 20:  return f"color: {PAL['succes']}; font-weight: 700"
+                    elif val >= 0: return f"color: {PAL['alerte']}; font-weight: 700"
+                    else:          return f"color: {PAL['danger']}; font-weight: 700"
 
                 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
                 st.dataframe(
@@ -2033,17 +2094,17 @@ elif menu == "KPI":
             idle_par_machine = (100 - taux_par_machine).round(1)
 
             def color_util(taux):
-                if taux >= 75:   return "#3fb950"
-                elif taux >= 50: return "#58a6ff"
-                elif taux >= 25: return "#f59e0b"
-                else:            return "#f85149"
+                if taux >= 75:   return G_SUCCES
+                elif taux >= 50: return G_INFO
+                elif taux >= 25: return G_ALERTE
+                else:            return G_DANGER
 
             colors_util = [color_util(v) for v in taux_par_machine]
 
             st.markdown(
                 "<p class='section-title'>Taux d'utilisation par machine"
                 " &nbsp;<span style='font-family:Inter,sans-serif;font-weight:400;"
-                "font-size:10px;color:#8b949e;text-transform:none;letter-spacing:0'>"
+                "font-size:10px;color:var(--texteFaible);text-transform:none;letter-spacing:0'>"
                 f"{icon_img('icon-green.png', 13)} ≥75% · "
                 f"{icon_img('icon-blue.png', 13)} 50-75% · "
                 f"{icon_img('icon-orange.png', 13)} 25-50% · "
@@ -2059,18 +2120,18 @@ elif menu == "KPI":
             ))
             fig_util.add_trace(go.Bar(
                 name="Idle (%)", x=machine_util.index.tolist(), y=idle_par_machine,
-                marker_color="rgba(48,54,61,0.6)", marker_line=dict(width=0),
+                marker_color=G_GRILLE, marker_line=dict(width=0),
                 text=[f"{v}%" for v in idle_par_machine], textposition="inside",
-                textfont=dict(color="#8b949e", size=10)
+                textfont=dict(color=G_FAIBLE, size=10)
             ))
-            fig_util.add_hline(y=75, line_dash="dot", line_color="#ffffff", line_width=1.8,
+            fig_util.add_hline(y=75, line_dash="dot", line_color=G_TEXTE, line_width=1.8,
                 annotation_text="Seuil 75%",
-                annotation_font_color="#ffffff", annotation_font_size=10)
+                annotation_font_color=G_TEXTE, annotation_font_size=10)
             fig_util.update_layout(**chart_layout(
                 barmode="stack", height=440,
-                legend=dict(orientation="h", y=1.1, font=dict(color="#c9d1d9", size=11)),
-                yaxis=dict(range=[0, 110], title="% Makespan", gridcolor="#21262d", color="#8b949e"),
-                xaxis=dict(gridcolor="#21262d", color="#8b949e")
+                legend=dict(orientation="h", y=1.1, font=dict(color=G_TEXTE, size=11)),
+                yaxis=dict(range=[0, 110], title="% Makespan", gridcolor=G_GRILLE, color=G_FAIBLE),
+                xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE)
             ))
             st.plotly_chart(fig_util, use_container_width=True)
 
@@ -2080,13 +2141,13 @@ elif menu == "KPI":
                 fig_pie = go.Figure(go.Pie(
                     labels=["Temps productif", "Temps idle"],
                     values=[duree_totale, idle_total], hole=0.58,
-                    marker=dict(colors=["#ff6b00", "rgba(48,54,61,0.5)"],
-                                line=dict(color="#161b22", width=3)),
+                    marker=dict(colors=[G_APLAT, G_GRILLE],
+                                line=dict(color=G_PAPIER, width=3)),
                     textinfo="label+percent",
-                    textfont=dict(size=11, color="#c9d1d9", family="Inter"),
+                    textfont=dict(size=11, color=G_TEXTE, family="Inter"),
                 ))
-                center_color = ("#3fb950" if taux_util_moyen >= 75
-                                else "#ff6b00" if taux_util_moyen >= 50 else "#f59e0b")
+                center_color = (G_SUCCES if taux_util_moyen >= 75
+                                else G_ACCENT if taux_util_moyen >= 50 else G_ALERTE)
                 fig_pie.add_annotation(
                     text=f"<b>{taux_util_moyen}%</b>", x=0.5, y=0.5,
                     font=dict(size=22, color=center_color, family="Inter"), showarrow=False)
@@ -2096,7 +2157,7 @@ elif menu == "KPI":
             with col_g2:
                 st.markdown("<p class='section-title'>Temps de cycle par pièce</p>", unsafe_allow_html=True)
                 cycle_mean   = job_cycle["CycleTime"].mean()
-                colors_cycle = ["#58a6ff" if v <= cycle_mean else "#f59e0b"
+                colors_cycle = [G_INFO if v <= cycle_mean else G_ALERTE
                                 for v in job_cycle["CycleTime"]]
                 fig_cycle = go.Figure()
                 fig_cycle.add_trace(go.Bar(
@@ -2104,16 +2165,16 @@ elif menu == "KPI":
                     marker_color=colors_cycle, marker_line=dict(width=0),
                     text=[f"{v} min" for v in job_cycle["CycleTime"].tolist()],
                     textposition="outside",
-                    textfont=dict(color="#c9d1d9", size=10, family="Inter")
+                    textfont=dict(color=G_TEXTE, size=10, family="Inter")
                 ))
                 fig_cycle.add_hline(y=cycle_mean, line_dash="dash",
-                    line_color="#ffffff", line_width=2,
+                    line_color=G_TEXTE, line_width=2,
                     annotation_text=f"Moy : {cycle_mean:.0f} min",
-                    annotation_font_color="#ffffff", annotation_font_size=10)
+                    annotation_font_color=G_TEXTE, annotation_font_size=10)
                 fig_cycle.update_layout(**chart_layout(
                     height=420,
-                    yaxis=dict(title="Minutes", gridcolor="#21262d", color="#8b949e"),
-                    xaxis=dict(gridcolor="#21262d", color="#8b949e")
+                    yaxis=dict(title="Minutes", gridcolor=G_GRILLE, color=G_FAIBLE),
+                    xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE)
                 ))
                 st.plotly_chart(fig_cycle, use_container_width=True)
 
@@ -2128,7 +2189,7 @@ elif menu == "KPI":
                                         else df_kpi["JobLabel"].tolist()
 
                     with col_g3:
-                        colors_profit = ["#3fb950" if v >= 0 else "#f85149"
+                        colors_profit = [G_SUCCES if v >= 0 else G_DANGER
                                          for v in df_kpi["Profit (€)"]]
                         fig_profit = go.Figure()
                         fig_profit.add_trace(go.Bar(
@@ -2136,43 +2197,43 @@ elif menu == "KPI":
                             marker_color=colors_profit, marker_line=dict(width=0),
                             text=[f"{v:.1f}€" for v in df_kpi["Profit (€)"]],
                             textposition="outside",
-                            textfont=dict(size=10, color="#c9d1d9", family="Inter")
+                            textfont=dict(size=10, color=G_TEXTE, family="Inter")
                         ))
-                        fig_profit.add_hline(y=0, line_color="#30363d", line_width=1.2)
+                        fig_profit.add_hline(y=0, line_color=G_GRILLE, line_width=1.2)
                         fig_profit.update_layout(**chart_layout(
                             height=440,
                             title=dict(text="Profit (€) par pièce",
-                                       font=dict(color="#ff6b00", size=12, family="Inter"), x=0.01),
-                            yaxis=dict(title="Profit (€)", gridcolor="#21262d", color="#8b949e"),
-                            xaxis=dict(gridcolor="#21262d", color="#8b949e")
+                                       font=dict(color=G_ACCENT, size=12, family="Inter"), x=0.01),
+                            yaxis=dict(title="Profit (€)", gridcolor=G_GRILLE, color=G_FAIBLE),
+                            xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE)
                         ))
                         st.plotly_chart(fig_profit, use_container_width=True)
 
                     with col_g4:
-                        colors_marge = ["#3fb950" if v >= 20 else "#f59e0b" if v >= 0
-                                        else "#f85149" for v in df_kpi["Marge (%)"]]
+                        colors_marge = [G_SUCCES if v >= 20 else G_ALERTE if v >= 0
+                                        else G_DANGER for v in df_kpi["Marge (%)"]]
                         fig_marge = go.Figure()
                         fig_marge.add_trace(go.Bar(
                             x=piece_labels_list, y=df_kpi["Marge (%)"].tolist(),
                             marker_color=colors_marge, marker_line=dict(width=0),
                             text=[f"{v:.1f}%" for v in df_kpi["Marge (%)"]],
                             textposition="outside",
-                            textfont=dict(size=10, color="#c9d1d9", family="Inter")
+                            textfont=dict(size=10, color=G_TEXTE, family="Inter")
                         ))
                         max_marge = df_kpi["Marge (%)"].max()
                         fig_marge.add_hrect(y0=20, y1=max(max_marge * 1.3, 25),
                             fillcolor="rgba(0,188,212,0.05)", line_width=0)
                         fig_marge.add_hline(y=20, line_dash="dash",
-                            line_color="#00bcd4", line_width=1.8,
+                            line_color=G_INFO, line_width=1.8,
                             annotation_text="Seuil 20%",
-                            annotation_font_color="#00bcd4", annotation_font_size=10)
-                        fig_marge.add_hline(y=0, line_color="#30363d", line_width=1)
+                            annotation_font_color=G_INFO, annotation_font_size=10)
+                        fig_marge.add_hline(y=0, line_color=G_GRILLE, line_width=1)
                         fig_marge.update_layout(**chart_layout(
                             height=440,
                             title=dict(text="Marge (%) par pièce",
-                                       font=dict(color="#ff6b00", size=12, family="Inter"), x=0.01),
-                            yaxis=dict(title="Marge (%)", gridcolor="#21262d", color="#8b949e"),
-                            xaxis=dict(gridcolor="#21262d", color="#8b949e")
+                                       font=dict(color=G_ACCENT, size=12, family="Inter"), x=0.01),
+                            yaxis=dict(title="Marge (%)", gridcolor=G_GRILLE, color=G_FAIBLE),
+                            xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE)
                         ))
                         st.plotly_chart(fig_marge, use_container_width=True)
 
@@ -2183,9 +2244,9 @@ elif menu == "KPI":
                     dc = st.session_state["df_cout"]
                     fig_cout = go.Figure()
                     cost_items = [
-                        ("Coût machine (€)",  "#58a6ff"),
+                        ("Coût machine (€)",  G_INFO),
                         ("Coût MO (€)",       "#8b49ff"),
-                        ("Coût indirect (€)", "#f59e0b"),
+                        ("Coût indirect (€)", G_ALERTE),
                         ("Coût matière (€)",  "#f0883e"),
                     ]
                     x_labels = dc["Pièce"].tolist() if "Pièce" in dc.columns else dc["JobLabel"].tolist()
@@ -2198,9 +2259,9 @@ elif menu == "KPI":
                             ))
                     fig_cout.update_layout(**chart_layout(
                         barmode="stack", height=440,
-                        legend=dict(orientation="h", y=1.1, font=dict(color="#c9d1d9", size=11)),
-                        yaxis=dict(title="Coût (€)", gridcolor="#21262d", color="#8b949e"),
-                        xaxis=dict(gridcolor="#21262d", color="#8b949e")
+                        legend=dict(orientation="h", y=1.1, font=dict(color=G_TEXTE, size=11)),
+                        yaxis=dict(title="Coût (€)", gridcolor=G_GRILLE, color=G_FAIBLE),
+                        xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE)
                     ))
                     st.plotly_chart(fig_cout, use_container_width=True)
             else:
@@ -2293,6 +2354,7 @@ elif menu == "Historique":
                                 piece_map=pm_h,
                                 start_time_day=int(st.session_state.get("start_time_day", 360)),
                                 cte=int(st.session_state.get("cte", 0)),
+                                palette=PAL,
                             )
                             gantt_html = pio.to_html(fig_h, full_html=True, include_plotlyjs="cdn")
                             st.download_button(
@@ -2405,6 +2467,7 @@ elif menu == "Export":
                     piece_map=piece_map,
                     start_time_day=int(st.session_state.get("start_time_day", 360)),
                     cte=int(st.session_state.get("cte", 0)),
+                    palette=PAL,
                 )
                 gantt_html = pio.to_html(fig, full_html=True, include_plotlyjs="cdn")
                 st.markdown(f"""<div class='dl-card'>
