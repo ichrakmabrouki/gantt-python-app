@@ -1,0 +1,351 @@
+{
+  "budget_secondes": 60.0,
+  "cas": {
+    "01_08pieces_cte10": {
+      "operations": 18,
+      "taille_v1": {
+        "base": 108,
+        "paires_z": 192,
+        "paires_K": 402,
+        "tfs": 36,
+        "total": 738
+      },
+      "taille_v2": {
+        "base": 54,
+        "affectation": 36,
+        "intervalles_machine": 36,
+        "technicien": 144,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 271
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 1.3,
+        "operations": 18,
+        "makespan": 256,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "resolu",
+        "secondes": 3.0,
+        "operations": 18,
+        "makespan": 245,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      }
+    },
+    "02_12pieces_cte12": {
+      "operations": 37,
+      "taille_v1": {
+        "base": 333,
+        "paires_z": 1680,
+        "paires_K": 3126,
+        "tfs": 111,
+        "total": 5250
+      },
+      "taille_v2": {
+        "base": 111,
+        "affectation": 111,
+        "intervalles_machine": 111,
+        "technicien": 444,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 778
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 12.0,
+        "operations": 37,
+        "makespan": 401,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "resolu",
+        "secondes": 67.4,
+        "operations": 37,
+        "makespan": 400,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      }
+    },
+    "03_20pieces_cte15": {
+      "operations": 57,
+      "taille_v1": {
+        "base": 513,
+        "paires_z": 3520,
+        "paires_K": 7148,
+        "tfs": 171,
+        "total": 11352
+      },
+      "taille_v2": {
+        "base": 171,
+        "affectation": 171,
+        "intervalles_machine": 171,
+        "technicien": 684,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 1198
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 61.1,
+        "operations": 57,
+        "makespan": 560,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "resolu",
+        "secondes": 73.7,
+        "operations": 57,
+        "makespan": 1612,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      }
+    },
+    "04_25pieces_cte15": {
+      "operations": 90,
+      "taille_v1": {
+        "base": 810,
+        "paires_z": 7876,
+        "paires_K": 14974,
+        "tfs": 270,
+        "total": 23930
+      },
+      "taille_v2": {
+        "base": 270,
+        "affectation": 270,
+        "intervalles_machine": 270,
+        "technicien": 1080,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 1891
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 60.7,
+        "operations": 90,
+        "makespan": 784,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "resolu",
+        "secondes": 97.4,
+        "operations": 90,
+        "makespan": 20889,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      }
+    },
+    "05_35pieces_cte18": {
+      "operations": 141,
+      "taille_v1": {
+        "base": 1269,
+        "paires_z": 17632,
+        "paires_K": 35402,
+        "tfs": 423,
+        "total": 54726
+      },
+      "taille_v2": {
+        "base": 423,
+        "affectation": 423,
+        "intervalles_machine": 423,
+        "technicien": 1692,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 2962
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 24.1,
+        "operations": 141,
+        "makespan": 1239,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 134.9,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    },
+    "06_45pieces_cte20": {
+      "operations": 186,
+      "taille_v1": {
+        "base": 1674,
+        "paires_z": 30654,
+        "paires_K": 61720,
+        "tfs": 558,
+        "total": 94606
+      },
+      "taille_v2": {
+        "base": 558,
+        "affectation": 558,
+        "intervalles_machine": 558,
+        "technicien": 2232,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 3907
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 29.9,
+        "operations": 186,
+        "makespan": 1668,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 100.4,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    },
+    "07_60pieces_cte22": {
+      "operations": 255,
+      "taille_v1": {
+        "base": 2295,
+        "paires_z": 48102,
+        "paires_K": 96886,
+        "tfs": 765,
+        "total": 148048
+      },
+      "taille_v2": {
+        "base": 765,
+        "affectation": 765,
+        "intervalles_machine": 765,
+        "technicien": 3060,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 5356
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 63.5,
+        "operations": 255,
+        "makespan": 1986,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 143.7,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    },
+    "08_75pieces_cte25": {
+      "operations": 305,
+      "taille_v1": {
+        "base": 2745,
+        "paires_z": 68960,
+        "paires_K": 138632,
+        "tfs": 915,
+        "total": 211252
+      },
+      "taille_v2": {
+        "base": 915,
+        "affectation": 915,
+        "intervalles_machine": 915,
+        "technicien": 3660,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 6406
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 64.4,
+        "operations": 305,
+        "makespan": 2576,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 145.7,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    },
+    "09_90pieces_cte28": {
+      "operations": 359,
+      "taille_v1": {
+        "base": 3231,
+        "paires_z": 81840,
+        "paires_K": 164656,
+        "tfs": 1077,
+        "total": 250804
+      },
+      "taille_v2": {
+        "base": 1077,
+        "affectation": 1077,
+        "intervalles_machine": 1077,
+        "technicien": 4308,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 7540
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 69.0,
+        "operations": 359,
+        "makespan": 2720,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 150.6,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    },
+    "10_100pieces_cte30": {
+      "operations": 395,
+      "taille_v1": {
+        "base": 3555,
+        "paires_z": 92774,
+        "paires_K": 178664,
+        "tfs": 1185,
+        "total": 276178
+      },
+      "taille_v2": {
+        "base": 1185,
+        "affectation": 1185,
+        "intervalles_machine": 1185,
+        "technicien": 4740,
+        "paires_z": 0,
+        "paires_K": 0,
+        "total": 8296
+      },
+      "v2": {
+        "statut": "resolu",
+        "secondes": 66.4,
+        "operations": 395,
+        "makespan": 2619,
+        "valide": true,
+        "violations": [],
+        "nb_violations": 0
+      },
+      "v1": {
+        "statut": "echec",
+        "secondes": 149.3,
+        "erreur": "ValueError: Pas de solution trouvée. Status: UNKNOWN"
+      }
+    }
+  }
+}
