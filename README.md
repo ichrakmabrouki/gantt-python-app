@@ -6,6 +6,8 @@ profit of every part.
 
 Built with **OR-Tools CP-SAT**, **Streamlit** and **Supabase**.
 
+**[▶ Try the live app](https://gantt-python-app-hekfuuz3lvxpzaxmx3fmnx.streamlit.app/)** — no installation, works on mobile.
+
 ---
 
 ## The problem
