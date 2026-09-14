@@ -80,7 +80,6 @@ from backend.database       import (
     verify_session_token,
     log_app_access,
     load_access_logs,
-    load_access_summary,
 )
 
 init_db()
@@ -911,6 +910,72 @@ def cookie_delete(name: str) -> None:
     except Exception:
         pass
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# JOURNAL DES ACCES
+# ══════════════════════════════════════════════════════════════════════════════
+# Le journal n'enregistrait que les personnes CONNECTEES. Or la page de
+# connexion se termine par st.stop() : quelqu'un qui ouvrait le lien, regardait
+# et repartait n'apparaissait nulle part. C'etait precisement la question a
+# laquelle ce journal devait repondre — combien de gens ont ouvert le lien.
+#
+# Ce qui est enregistre d'un visiteur anonyme : un identifiant aleatoire tire
+# une fois et garde dans un cookie, la date, et la provenance lue dans l'adresse
+# (?src=linkedin). Ni adresse IP, ni nom, ni rien qui permette de remonter a une
+# personne : de quoi compter des visiteurs, pas de quoi les identifier.
+
+
+def _request_context() -> tuple[str | None, str | None]:
+    try:
+        headers = st.context.headers
+    except Exception:
+        headers = {}
+
+    def header(name: str) -> str | None:
+        try:
+            return headers.get(name)
+        except Exception:
+            return None
+
+    user_agent = header("user-agent")
+    host = header("host") or header("x-forwarded-host")
+    proto = header("x-forwarded-proto") or "https"
+    app_url = f"{proto}://{host}" if host else None
+    return app_url, user_agent
+
+
+def identifiant_visiteur() -> str:
+    """Identifiant anonyme, stable d'une visite a l'autre sur un navigateur.
+
+    Sans lui, un rechargement de page compterait comme un nouveau visiteur et
+    le total ne voudrait plus rien dire.
+    """
+    if st.session_state.get("visiteur_id"):
+        return st.session_state["visiteur_id"]
+    try:
+        identifiant = cookie_manager.get("gantt_visiteur")
+    except Exception:
+        identifiant = None
+    if not identifiant:
+        identifiant = "visiteur-" + uuid.uuid4().hex[:10]
+        cookie_set("gantt_visiteur", identifiant,
+                   datetime.now() + timedelta(days=180))
+    st.session_state["visiteur_id"] = identifiant
+    return identifiant
+
+
+def journaliser(qui: str, evenement: str) -> None:
+    """Une ligne par evenement et par session : ni doublon, ni trou."""
+    drapeau = f"journal_{evenement}"
+    if st.session_state.get(drapeau):
+        return
+    app_url, user_agent = _request_context()
+    source = (st.query_params.get("src")
+              or st.query_params.get("source") or "direct")
+    log_app_access(username=qui, event=evenement, page="app",
+                   app_url=app_url, user_agent=user_agent, source=source)
+    st.session_state[drapeau] = True
+
 # ── Initialisation session state ───────────────────────────────────────────
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
@@ -997,6 +1062,9 @@ if legacy_cookie and not st.session_state["authenticated"] and not st.session_st
 
 # ── Page de connexion ──────────────────────────────────────────────────────
 if not st.session_state["authenticated"]:
+    # Enregistre ici, et non plus bas : la page de connexion s'arrete sur un
+    # st.stop(), donc rien de ce qui suit ne serait atteint par un visiteur.
+    journaliser(identifiant_visiteur(), "visite")
 
     st.markdown(BANDEAU_RESEAU, unsafe_allow_html=True)
     st.markdown("""
@@ -1097,37 +1165,8 @@ if not st.session_state["authenticated"]:
 SID = st.session_state.get("SID")
 
 
-def _request_context() -> tuple[str | None, str | None]:
-    try:
-        headers = st.context.headers
-    except Exception:
-        headers = {}
-
-    def header(name: str) -> str | None:
-        try:
-            return headers.get(name)
-        except Exception:
-            return None
-
-    user_agent = header("user-agent")
-    host = header("host") or header("x-forwarded-host")
-    proto = header("x-forwarded-proto") or "https"
-    app_url = f"{proto}://{host}" if host else None
-    return app_url, user_agent
-
-
-if SID and not st.session_state.get("access_logged"):
-    app_url, user_agent = _request_context()
-    source = st.query_params.get("src") or st.query_params.get("source") or "direct"
-    log_app_access(
-        username=SID,
-        event="visit",
-        page="app",
-        app_url=app_url,
-        user_agent=user_agent,
-        source=source,
-    )
-    st.session_state["access_logged"] = True
+if SID:
+    journaliser(SID, "connexion")
 
 if st.session_state.get("authenticated") and st.session_state.get("user_role") == "admin":
     with st.sidebar:
@@ -2619,24 +2658,100 @@ elif menu == "Analytics":
         <p class='page-subtitle'>Suivi des acces a l'application et des utilisateurs connectes.</p>
     </div>""", unsafe_allow_html=True)
 
-    summary = load_access_summary()
-    c1, c2, c3 = st.columns(3, gap="large")
-    c1.metric("Acces enregistres", summary["total"])
-    c2.metric("Utilisateurs uniques", summary["users"])
-    c3.metric("Dernier acces", summary["last_access"] or "-")
+    journal = load_access_logs(limit=1000)
 
-    st.markdown("### Acces par utilisateur")
-    if summary["by_user"].empty:
-        st.info("Aucun acces enregistre pour le moment. Verifiez aussi que la table Supabase 'app_access_logs' existe.")
+    if journal.empty:
+        st.info("Aucun accès enregistré pour le moment. Vérifie aussi que la "
+                "table Supabase « app_access_logs » existe.")
     else:
-        st.dataframe(summary["by_user"], use_container_width=True, hide_index=True)
+        # Les lignes anterieures portent l'evenement "visit" : a l'epoque, seules
+        # les personnes connectees etaient enregistrees. On les rattache donc
+        # aux connexions, pour ne pas perdre l'historique deja accumule.
+        journal["event"] = journal["event"].replace({"visit": "connexion"})
 
-    st.markdown("### Derniers acces")
-    logs = load_access_logs(limit=200)
-    if logs.empty:
-        st.info("Aucun journal disponible.")
-    else:
-        st.dataframe(logs, use_container_width=True, hide_index=True)
+        visites    = journal[journal["event"] == "visite"]
+        connexions = journal[journal["event"] == "connexion"]
+
+        # Deux populations differentes : ceux qui ont ouvert le lien, et ceux
+        # qui sont alles jusqu'a se connecter. Les melanger ne dirait rien.
+        nb_visiteurs = visites["username"].nunique()
+        nb_comptes   = connexions["username"].nunique()
+        conversion   = (nb_comptes / nb_visiteurs * 100) if nb_visiteurs else 0.0
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("VISITEURS UNIQUES", nb_visiteurs,
+                  help="Navigateurs distincts ayant ouvert le lien, qu'ils se "
+                       "soient connectés ou non.")
+        c2.metric("COMPTES ACTIFS", nb_comptes,
+                  help="Comptes qui se sont connectés au moins une fois.")
+        c3.metric("ONT CRÉÉ UN COMPTE", f"{conversion:.0f} %".replace(".", ","),
+                  help="Part des visiteurs allés jusqu'à la connexion.")
+        c4.metric("DERNIÈRE VISITE", str(journal["created_at"].max())[:16])
+
+        # ── D'ou viennent-ils ? ──────────────────────────────────────────
+        # Ajoute ?src=linkedin a la fin du lien avant de le publier, et cette
+        # colonne dit combien de visiteurs chaque publication a amenes.
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<p class='section-title'>{icon_img('icon-search.png', 18)} "
+            f"Provenance</p>", unsafe_allow_html=True)
+
+        if visites.empty:
+            st.caption("Aucune visite anonyme enregistrée pour l'instant.")
+        else:
+            provenance = (visites.groupby(visites["source"].fillna("direct"))
+                          .agg(Visiteurs=("username", "nunique"),
+                               Visites=("username", "size"),
+                               Dernière=("created_at", "max"))
+                          .reset_index()
+                          .rename(columns={"source": "Provenance"})
+                          .sort_values("Visiteurs", ascending=False))
+            provenance["Dernière"] = provenance["Dernière"].astype(str).str[:16]
+            st.dataframe(provenance, use_container_width=True, hide_index=True)
+            st.caption("Pour distinguer tes publications, ajoute `?src=linkedin` "
+                       "ou `?src=cv` à la fin du lien que tu diffuses.")
+
+        # ── Rythme des visites ───────────────────────────────────────────
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<p class='section-title'>{icon_img('icon-chart.png', 18)} "
+            f"Visites par jour</p>", unsafe_allow_html=True)
+
+        jours = journal.copy()
+        jours["jour"] = pd.to_datetime(jours["created_at"], errors="coerce",
+                                       utc=True).dt.date
+        par_jour = (jours.dropna(subset=["jour"])
+                    .groupby(["jour", "event"])["username"]
+                    .nunique().unstack(fill_value=0).sort_index())
+        if par_jour.empty:
+            st.caption("Pas encore assez de données.")
+        else:
+            fig_j = go.Figure()
+            for evenement, couleur, nom in (("visite", G_APLAT, "Visiteurs"),
+                                            ("connexion", G_INFO, "Connexions")):
+                if evenement in par_jour.columns:
+                    fig_j.add_trace(go.Bar(x=par_jour.index,
+                                           y=par_jour[evenement],
+                                           name=nom, marker_color=couleur))
+            fig_j.update_layout(**chart_layout(
+                height=280, barmode="stack",
+                legend=dict(orientation="h", y=1.12,
+                            font=dict(color=G_TEXTE, size=12)),
+                yaxis=dict(title="Personnes", gridcolor=G_GRILLE, color=G_FAIBLE),
+                xaxis=dict(gridcolor=G_GRILLE, color=G_FAIBLE),
+            ))
+            st.plotly_chart(fig_j, use_container_width=True)
+
+        # ── Le detail brut ───────────────────────────────────────────────
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        with st.expander("Journal détaillé des 200 derniers accès"):
+            st.dataframe(journal.head(200), use_container_width=True,
+                         hide_index=True)
+
+        st.caption("Aucune adresse IP n'est enregistrée. Un visiteur anonyme "
+                   "est identifié par un numéro tiré au hasard, conservé dans "
+                   "un cookie de son navigateur : de quoi le compter une seule "
+                   "fois, pas de quoi savoir qui il est.")
 
 elif menu == "Export":
     st.markdown("""
