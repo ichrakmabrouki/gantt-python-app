@@ -944,6 +944,27 @@ def _request_context() -> tuple[str | None, str | None]:
     return app_url, user_agent
 
 
+def est_mobile() -> bool:
+    """L'application est-elle consultee depuis un telephone ?
+
+    Le CSS suffit a empiler des colonnes, mais pas a changer ce qui est
+    envoye : un diagramme construit pour un ecran large reste illisible sur un
+    telephone, quelle que soit la feuille de style. On lit donc l'en-tete
+    envoye par le navigateur pour construire une page differente.
+
+    La detection par en-tete n'est jamais parfaite — une tablette, un
+    navigateur en « mode bureau » passeront a cote. Elle ne sert donc qu'a
+    ameliorer la mise en page : les regles CSS restent le filet de securite.
+    """
+    if "est_mobile" not in st.session_state:
+        _, agent = _request_context()
+        agent = (agent or "").lower()
+        marqueurs = ("iphone", "android", "ipod", "windows phone",
+                     "mobile safari", "blackberry", "opera mini")
+        st.session_state["est_mobile"] = any(m in agent for m in marqueurs)
+    return st.session_state["est_mobile"]
+
+
 def identifiant_visiteur() -> str:
     """Identifiant anonyme, stable d'une visite a l'autre sur un navigateur.
 
@@ -1432,6 +1453,33 @@ st.markdown(f"""
 </div>
 <div class="divline"></div>
 """, unsafe_allow_html=True)
+
+# ── Navigation sur telephone ────────────────────────────────────────────────
+# La barre laterale est repliee par defaut sur un petit ecran, derriere une
+# fleche que personne ne remarque : les pages Planning, KPI et Historique
+# etaient donc introuvables. Elles sont reprises ici, en clair, au-dessus du
+# contenu. La barre laterale reste disponible pour le reste (import, clôture
+# de journee, compte).
+if est_mobile() and len(NAV_ITEMS) > 1:
+    libelles = [item["label"] for item in NAV_ITEMS]
+    actuel = next(item["label"] for item in NAV_ITEMS
+                  if item["key"] == st.session_state["main_nav"])
+    # Si la page a ete changee depuis la barre laterale, la pastille active
+    # doit suivre : un widget qui porte une cle garde son etat et ignore son
+    # `default` aux passages suivants.
+    if "nav_mobile" in st.session_state and st.session_state["nav_mobile"] != actuel:
+        st.session_state["nav_mobile"] = actuel
+    try:
+        choix = st.pills("Navigation", libelles, default=actuel,
+                         key="nav_mobile", label_visibility="collapsed")
+    except Exception:
+        # Version de Streamlit sans st.pills : la barre laterale prend le
+        # relais, l'application reste utilisable.
+        choix = None
+    if choix and choix != actuel:
+        st.session_state["main_nav"] = next(
+            item["key"] for item in NAV_ITEMS if item["label"] == choix)
+        st.rerun()
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def chart_layout(**kwargs):
@@ -1933,9 +1981,17 @@ elif menu == "Planning":
                 cte=cte_value,
                 x_range=x_range,
                 palette=PAL,
+                mobile=est_mobile(),
             )
             fig.update_layout(**chart_layout())
-            st.plotly_chart(fig, use_container_width=True)
+            if est_mobile():
+                st.caption("Glisse le diagramme pour parcourir la journée, "
+                           "pince pour zoomer.")
+                st.plotly_chart(fig, use_container_width=True,
+                                config={"scrollZoom": True,
+                                        "displayModeBar": False})
+            else:
+                st.plotly_chart(fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 3 — KPIs
