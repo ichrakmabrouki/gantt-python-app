@@ -637,6 +637,45 @@ input:focus, textarea:focus {
 }
 .js-plotly-plot .plot-container { border-radius: var(--rayon); overflow: hidden; }
 
+/* ── Bouton d'ouverture du menu ──────────────────────────────────────────── */
+/* Une fois la barre laterale repliee, Streamlit ne laisse qu'une fleche grise
+   de la taille d'un ongle : rien n'indique qu'elle ramene Planning, KPI et
+   Historique. Elle porte donc son nom, sur telephone comme sur ordinateur.
+   Seul le bouton d'OUVERTURE est concerne : celui qui referme la barre, a
+   l'interieur, garde sa fleche — il ne mene nulle part. */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    background: rgba(255,122,26,0.13) !important;
+    border: 1px solid rgba(255,122,26,0.40) !important;
+    border-radius: 999px !important;
+    min-height: 38px !important;
+    padding: 6px 15px 6px 11px !important;
+    box-shadow: 0 8px 22px -14px rgba(255,122,26,0.9) !important;
+    transition: background .15s ease, border-color .15s ease;
+}
+[data-testid="stSidebarCollapsedControl"]:hover,
+[data-testid="collapsedControl"]:hover {
+    background: rgba(255,122,26,0.22) !important;
+    border-color: rgba(255,122,26,0.65) !important;
+}
+[data-testid="stSidebarCollapsedControl"]::after,
+[data-testid="collapsedControl"]::after {
+    content: "MENU";
+    font-family: 'Inter', sans-serif;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    white-space: nowrap;
+}
+[data-testid="stSidebarCollapsedControl"] svg,
+[data-testid="collapsedControl"] svg {
+    width: 20px !important; height: 20px !important;
+}
+
 /* ── Ecriture ────────────────────────────────────────────────────────────── */
 /* L'interface etait ecrite trop petit : titres de section a 11 px, libelles de
    chiffres a 10 px, messages a 12 px, le tout en majuscules espacees de 3 px.
@@ -829,33 +868,11 @@ CSS_MOBILE = """<style>
 
   [data-testid="stSidebar"] { min-width: 84vw !important; }
 
-  /* Le bouton d'ouverture du menu etait une fleche grise de la taille d'un
-     ongle : personne ne devinait qu'il fallait cliquer dessus pour atteindre
-     Planning, KPI ou Historique. Il porte maintenant son nom. */
+  /* Zone tactile portee a 44 px sur telephone. */
   [data-testid="stSidebarCollapsedControl"],
   [data-testid="collapsedControl"] {
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 6px !important;
-      background: rgba(255,122,26,0.14) !important;
-      border: 1px solid rgba(255,122,26,0.42) !important;
-      border-radius: 999px !important;
       min-height: 44px !important;
       padding: 8px 16px 8px 12px !important;
-      box-shadow: 0 8px 22px -14px rgba(255,122,26,0.9) !important;
-  }
-  [data-testid="stSidebarCollapsedControl"]::after,
-  [data-testid="collapsedControl"]::after {
-      content: "MENU";
-      font-family: 'Inter', sans-serif;
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      color: var(--accent);
-  }
-  [data-testid="stSidebarCollapsedControl"] svg,
-  [data-testid="collapsedControl"] svg {
-      width: 20px !important; height: 20px !important;
   }
 
   /* Navigation en pastilles : elles doivent tenir sur deux lignes et rester
