@@ -1,0 +1,52 @@
+# A placer dans : .github/workflows/supabase-keepalive.yml
+name: Keep-alive Supabase et application
+
+# Deux mises en veille menacent l'application, et elles n'ont rien a voir :
+#
+#   Supabase (plan gratuit) met le projet en PAUSE apres ~7 jours sans aucune
+#   requete. Il faut alors le reveiller a la main depuis le tableau de bord.
+#
+#   Streamlit Community Cloud endort l'application apres 12 heures sans trafic.
+#   Le visiteur tombe alors sur "This app has gone to sleep" et doit cliquer
+#   pour la relancer — une trentaine de secondes d'attente, et une premiere
+#   impression gachee si ce visiteur est un recruteur.
+#
+# Ce workflow traite les deux : une lecture dans Supabase, et une visite de
+# l'application. Toutes les six heures, c'est assez pour tenir les 12 heures
+# de Streamlit et tres loin d'etre abusif.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"    # toutes les 6 heures
+  workflow_dispatch:         # permet aussi de le lancer a la main
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping de l'API Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /tmp/out.txt -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            "${SUPABASE_URL}/rest/v1/users?select=username&limit=1")
+          echo "HTTP ${code}"
+          cat /tmp/out.txt
+          if [ "${code}" -ge 400 ]; then
+            echo "::error::Supabase a repondu ${code}"
+            exit 1
+          fi
+
+      - name: Reveil de l'application Streamlit
+        env:
+          APP_URL: https://gantt-python-app-hekfuuz3lvxpzaxmx3fmnx.streamlit.app/
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 90 "${APP_URL}")
+          echo "Application : HTTP ${code}"
+          # Une application endormie repond quand meme 200 : on ne fait pas
+          # echouer le job la-dessus, l'appel suffit a la reveiller.
