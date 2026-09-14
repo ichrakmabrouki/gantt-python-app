@@ -22,6 +22,12 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent
 SECRETS = RACINE / ".streamlit" / "secrets.toml"
 
+# Adresse publique de l'application. Streamlit Cloud ne la communique a aucune
+# commande locale : elle n'existe que dans son tableau de bord. On la note donc
+# ici, une fois, pour qu'elle soit affichable sans aller la rechercher.
+# A changer si tu renommes l'app dans Settings -> General -> App URL.
+URL_PUBLIQUE = "https://gantt-python-app-hekfuuz3lvxpzaxmx3fmnx.streamlit.app/"
+
 # Fichiers pousses : la liste est explicite, pour ne pas emporter par megarde
 # la base locale, les exports ou les rapports de test.
 A_POUSSER = [
@@ -193,9 +199,26 @@ def marche_a_suivre() -> None:
 """)
 
 
+def afficher_lien() -> None:
+    titre("Le lien à envoyer aux utilisateurs")
+    print(f"\n    {URL_PUBLIQUE}\n")
+    print("Il fonctionne depuis n'importe quel appareil, ton PC éteint.")
+
+
 if __name__ == "__main__":
+    if "--lien" in sys.argv:          # python preparer_deploiement.py --lien
+        print(URL_PUBLIQUE)
+        sys.exit(0)
+
+
     print("Préparation du déploiement — " + str(RACINE))
     verifier_session_secret()
     pousser()
     afficher_secrets()
-    marche_a_suivre()
+    # L'application existe deja : on affiche son adresse. La marche a suivre
+    # pour en creer une reste accessible avec --creer, si elle doit etre
+    # recreee un jour.
+    if "--creer" in sys.argv:
+        marche_a_suivre()
+    else:
+        afficher_lien()
