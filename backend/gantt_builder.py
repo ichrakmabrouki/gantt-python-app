@@ -40,10 +40,14 @@ def build_gantt(
     cte: int = 0,
     x_range: tuple[int, int] | None = None,
     palette: dict | None = None,
+    mobile: bool = False,
 ) -> go.Figure:
     # Le Gantt etait entierement code en sombre : sur fond blanc, il devenait
     # un rectangle noir au texte gris. Les couleurs viennent maintenant de la
     # palette du theme actif ; sans argument, on garde le mode sombre.
+    # Sur telephone, le diagramme ne peut pas seulement retrecir : la legende
+    # verticale devorerait la moitie de la largeur, et des etiquettes de 7 px
+    # ne se lisent pas. Il est donc reconstruit, pas seulement redimensionne.
     pal = palette or PALETTES["sombre"]
     c_texte  = pal["texte"]
     c_faible = pal["texteFaible"]
@@ -260,7 +264,7 @@ def build_gantt(
         color=c_faible,
         gridcolor=c_grille,
         range=[view_start, view_end],
-        tickfont=dict(size=7),
+        tickfont=dict(size=10 if mobile else 7),
         tickangle=0,
         title_standoff=4,
         automargin=True,
@@ -274,21 +278,32 @@ def build_gantt(
     fig.update_layout(
         barmode="overlay",
         title=dict(
-            text="Diagramme de Gantt - Ordonnancement continu multi-jours",
-            font=dict(family="Inter", color=c_accent, size=14),
+            text="Ordonnancement" if mobile
+                 else "Diagramme de Gantt - Ordonnancement continu multi-jours",
+            font=dict(family="Inter", color=c_accent, size=13 if mobile else 14),
         ),
-        height=160 + 70 * machine_count,
-        font=dict(family="Inter", size=12, color=c_texte),
+        height=(150 + 62 * machine_count) if mobile
+               else (160 + 70 * machine_count),
+        font=dict(family="Inter", size=12 if not mobile else 13, color=c_texte),
         plot_bgcolor=c_fond,
         paper_bgcolor="rgba(0,0,0,0)",
+        # Legende sous le graphique sur telephone : posee a droite, elle
+        # prenait la moitie de l'ecran et le Gantt devenait une bande.
         legend=dict(
-            title=dict(text="Pieces", font=dict(color=c_accent)),
-            orientation="v",
-            font=dict(color=c_texte),
-            bgcolor=c_panneau,
+            title=dict(text="" if mobile else "Pieces",
+                       font=dict(color=c_accent)),
+            orientation="h" if mobile else "v",
+            yanchor="top" if mobile else "auto",
+            y=-0.22 if mobile else 1,
+            x=0 if mobile else 1.02,
+            font=dict(color=c_texte, size=11 if mobile else 12),
+            bgcolor="rgba(0,0,0,0)" if mobile else c_panneau,
             bordercolor=c_grille,
-            borderwidth=1,
+            borderwidth=0 if mobile else 1,
         ),
-        margin=dict(l=10, r=10, t=60, b=52),
+        # Le doigt fait defiler le temps ; le pincement zoome.
+        dragmode="pan" if mobile else "zoom",
+        margin=(dict(l=4, r=4, t=34, b=96) if mobile
+                else dict(l=10, r=10, t=60, b=52)),
     )
     return fig
