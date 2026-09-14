@@ -452,34 +452,6 @@ def load_access_logs(limit: int = 200) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def load_access_summary() -> dict:
-    logs = load_access_logs(limit=1000)
-    if logs.empty:
-        return {
-            "total": 0,
-            "users": 0,
-            "last_access": None,
-            "by_user": pd.DataFrame(),
-        }
-
-    by_user = (
-        logs.groupby("username", dropna=False)
-        .agg(
-            acces=("username", "size"),
-            dernier_acces=("created_at", "max"),
-        )
-        .reset_index()
-        .sort_values(["acces", "dernier_acces"], ascending=[False, False])
-    )
-
-    return {
-        "total": int(len(logs)),
-        "users": int(logs["username"].nunique()),
-        "last_access": logs["created_at"].max(),
-        "by_user": by_user,
-    }
-
-
 def clear_all(session_id: str) -> None:
     client = get_client()
     for table in ("operations", "jobs", "kpis", "prix", "planning_jours"):
