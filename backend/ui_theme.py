@@ -397,7 +397,9 @@ def css_reseau() -> str:
     pointer-events: none;
 }}
 @media (max-width: 820px) {{
-    .bandeau-reseau {{ height: 76px; margin: -12px -14px -6px -14px; }}
+    /* Le bouton MENU se pose en haut a gauche : on decale le motif pour
+       qu'il ne passe pas derriere. */
+    .bandeau-reseau {{ height: 66px; margin: 30px -14px -6px -14px; }}
 }}
 </style>"""
 
@@ -795,13 +797,21 @@ CSS_MOBILE = """<style>
   }
 
   [data-testid="stDataFrame"],
-  [data-testid="stTable"],
-  .js-plotly-plot,
-  .stPlotlyChart {
+  [data-testid="stTable"] {
       overflow-x: auto !important;
       max-width: 100% !important;
   }
-  .js-plotly-plot .plotly { min-width: 560px !important; }
+
+  /* Les graphiques occupent toute la largeur de l'ecran au lieu d'etre
+     enfermes dans un cadre defilant de 560 px. Le Gantt se parcourt au doigt
+     (Plotly gere le glisser et le pincement), ce qui vaut mieux qu'une barre
+     de defilement horizontale sur un telephone. */
+  .js-plotly-plot, .stPlotlyChart {
+      max-width: 100% !important;
+      overflow: visible !important;
+  }
+  .js-plotly-plot .plotly { min-width: 0 !important; width: 100% !important; }
+  .block-container .stPlotlyChart { margin-left: -6px; margin-right: -6px; }
 
   [data-testid="stMetric"]      { padding: 10px 0 !important; }
   [data-testid="stMetricValue"] { font-size: 1.65rem !important; }
@@ -817,7 +827,51 @@ CSS_MOBILE = """<style>
   .stTabs [data-baseweb="tab-list"] { overflow-x: auto !important; flex-wrap: nowrap !important; }
   .stTabs [data-baseweb="tab"]      { min-width: max-content !important; }
 
-  [data-testid="stSidebar"] { min-width: 78vw !important; }
+  [data-testid="stSidebar"] { min-width: 84vw !important; }
+
+  /* Le bouton d'ouverture du menu etait une fleche grise de la taille d'un
+     ongle : personne ne devinait qu'il fallait cliquer dessus pour atteindre
+     Planning, KPI ou Historique. Il porte maintenant son nom. */
+  [data-testid="stSidebarCollapsedControl"],
+  [data-testid="collapsedControl"] {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      background: rgba(255,122,26,0.14) !important;
+      border: 1px solid rgba(255,122,26,0.42) !important;
+      border-radius: 999px !important;
+      min-height: 44px !important;
+      padding: 8px 16px 8px 12px !important;
+      box-shadow: 0 8px 22px -14px rgba(255,122,26,0.9) !important;
+  }
+  [data-testid="stSidebarCollapsedControl"]::after,
+  [data-testid="collapsedControl"]::after {
+      content: "MENU";
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+  }
+  [data-testid="stSidebarCollapsedControl"] svg,
+  [data-testid="collapsedControl"] svg {
+      width: 20px !important; height: 20px !important;
+  }
+
+  /* Navigation en pastilles : elles doivent tenir sur deux lignes et rester
+     cliquables au pouce. */
+  [data-testid="stPills"] { margin-bottom: 14px !important; }
+  [data-testid="stPills"] div[role="group"] {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+  }
+  [data-testid="stPills"] button {
+      min-height: 40px !important;
+      padding: 8px 16px !important;
+      font-size: 0.88rem !important;
+      flex: 1 1 auto !important;
+  }
 
   /* Le verre depoli coute cher en calcul sur telephone : on l'allege.
      Les mesures en sont exclues — elles n'ont plus de cadre nulle part, et
@@ -838,7 +892,9 @@ CSS_MOBILE = """<style>
 @media (max-width: 480px) {
   .header-title { font-size: 1.35rem !important; letter-spacing: 0.04em !important; }
   .block-container { padding: 10px 10px 60px 10px !important; }
-  .js-plotly-plot .plotly { min-width: 480px !important; }
+  /* Surtout PAS de largeur minimale ici : c'est elle qui debordait de
+     l'ecran et rendait le Gantt illisible sur un telephone. */
+  .js-plotly-plot .plotly { min-width: 0 !important; width: 100% !important; }
 }
 
 [data-testid="stAppViewContainer"] { overflow-x: hidden !important; }
