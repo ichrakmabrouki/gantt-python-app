@@ -211,7 +211,20 @@ def build_gantt(
             font=dict(color=c_danger, size=12),
         )
 
-    tick_step = 4 * 60
+    # Le pas etait fige a 4 h : trop large sur une seule journee (trois reperes
+    # pour huit heures de production), beaucoup trop serre sur dix jours, ou il
+    # produisait une soixantaine d'etiquettes qui se chevauchaient. Il suit
+    # maintenant l'etendue affichee, pour rester sous une dizaine de reperes.
+    etendue = max(int(view_end) - int(view_start), 1)
+    cible = 5 if mobile else 9
+    tick_step = 60
+    for pas in (30, 60, 120, 4 * 60, 8 * 60, WORKDAY_MINUTES,
+                2 * WORKDAY_MINUTES, 5 * WORKDAY_MINUTES,
+                10 * WORKDAY_MINUTES):
+        tick_step = pas
+        if etendue / pas <= cible:
+            break
+
     tick_start = (int(view_start) // tick_step) * tick_step
     tick_end = ((int(view_end) + tick_step - 1) // tick_step) * tick_step
     tickvals = list(range(tick_start, tick_end + 1, tick_step))
@@ -264,9 +277,12 @@ def build_gantt(
         color=c_faible,
         gridcolor=c_grille,
         range=[view_start, view_end],
-        tickfont=dict(size=10 if mobile else 7),
+        # 7 px, c'etait illisible : les heures se touchaient et le bandeau
+        # d'axe ressemblait a une ligne grise. Une graduation sur deux est
+        # masquee plutot que reduite quand la journee est longue.
+        tickfont=dict(size=11 if mobile else 12),
         tickangle=0,
-        title_standoff=4,
+        title_standoff=10,
         automargin=True,
     )
     fig.update_yaxes(
@@ -274,6 +290,9 @@ def build_gantt(
         title="Machines",
         color=c_faible,
         gridcolor=c_grille,
+        tickfont=dict(size=11 if mobile else 12),
+        title_standoff=10,
+        automargin=True,
     )
     fig.update_layout(
         barmode="overlay",
@@ -282,8 +301,11 @@ def build_gantt(
                  else "Diagramme de Gantt - Ordonnancement continu multi-jours",
             font=dict(family="Inter", color=c_accent, size=13 if mobile else 14),
         ),
-        height=(150 + 62 * machine_count) if mobile
-               else (160 + 70 * machine_count),
+        # Hauteur par machine : les barres se touchaient presque, ce qui
+        # donnait un bloc compact ou l'on ne distinguait plus les lignes.
+        height=(170 + 70 * machine_count) if mobile
+               else (190 + 82 * machine_count),
+        bargap=0.34,
         font=dict(family="Inter", size=12 if not mobile else 13, color=c_texte),
         plot_bgcolor=c_fond,
         paper_bgcolor="rgba(0,0,0,0)",
@@ -303,7 +325,7 @@ def build_gantt(
         ),
         # Le doigt fait defiler le temps ; le pincement zoome.
         dragmode="pan" if mobile else "zoom",
-        margin=(dict(l=4, r=4, t=34, b=96) if mobile
-                else dict(l=10, r=10, t=60, b=52)),
+        margin=(dict(l=6, r=6, t=40, b=104) if mobile
+                else dict(l=18, r=18, t=64, b=64)),
     )
     return fig
