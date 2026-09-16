@@ -40,6 +40,7 @@ A_POUSSER = [
     "README.md",
     "verifier_planning.py",
     "test_reference.py",
+    "test_interface.py",
     "test_fichiers_excel.py",
     "stress_test_solveur.py",
     "benchmark_v2.py",
