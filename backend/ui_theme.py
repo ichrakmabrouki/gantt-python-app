@@ -643,11 +643,23 @@ input:focus, textarea:focus {
    Historique. Elle porte donc son nom, sur telephone comme sur ordinateur.
    Seul le bouton d'OUVERTURE est concerne : celui qui referme la barre, a
    l'interieur, garde sa fleche — il ne mene nulle part. */
+/* Le nom de ce bouton a change au fil des versions de Streamlit, et la regle
+   ne visait aucun element reel : dans la 1.55, le bouton d'ouverture vit dans
+   l'en-tete et porte `stExpandSidebarButton` ; `stSidebarCollapsedControl` et
+   `collapsedControl` sont les noms des versions precedentes. Les trois sont
+   listes pour que l'habillage survive a une mise a jour dans un sens comme
+   dans l'autre. Le selecteur de repli vise aussi le conteneur, au cas ou une
+   version future redeplace l'attribut du bouton vers son parent. */
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"] button,
 [data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] button,
 [data-testid="collapsedControl"] {
     display: inline-flex !important;
     align-items: center !important;
+    justify-content: center !important;
     gap: 7px !important;
+    width: auto !important;
     background: rgba(255,122,26,0.13) !important;
     border: 1px solid rgba(255,122,26,0.40) !important;
     border-radius: 999px !important;
@@ -656,13 +668,17 @@ input:focus, textarea:focus {
     box-shadow: 0 8px 22px -14px rgba(255,122,26,0.9) !important;
     transition: background .15s ease, border-color .15s ease;
 }
+[data-testid="stExpandSidebarButton"]:hover,
+[data-testid="stSidebarCollapsedControl"] button:hover,
 [data-testid="stSidebarCollapsedControl"]:hover,
+[data-testid="collapsedControl"] button:hover,
 [data-testid="collapsedControl"]:hover {
     background: rgba(255,122,26,0.22) !important;
     border-color: rgba(255,122,26,0.65) !important;
 }
-[data-testid="stSidebarCollapsedControl"]::after,
-[data-testid="collapsedControl"]::after {
+[data-testid="stExpandSidebarButton"]::after,
+[data-testid="stSidebarCollapsedControl"] button::after,
+[data-testid="collapsedControl"] button::after {
     content: "MENU";
     font-family: 'Inter', sans-serif;
     font-size: 0.76rem;
@@ -671,10 +687,41 @@ input:focus, textarea:focus {
     color: var(--accent);
     white-space: nowrap;
 }
+/* Sur les anciennes versions l'attribut est porte par le conteneur lui-meme,
+   sans bouton interne : le libelle s'y accroche alors directement. */
+[data-testid="stSidebarCollapsedControl"]:not(:has(button))::after,
+[data-testid="collapsedControl"]:not(:has(button))::after {
+    content: "MENU";
+    font-family: 'Inter', sans-serif;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    white-space: nowrap;
+}
+/* L'icone de Streamlit est une ligature de police, pas un SVG, depuis la 1.5x. */
+[data-testid="stExpandSidebarButton"] svg,
 [data-testid="stSidebarCollapsedControl"] svg,
 [data-testid="collapsedControl"] svg {
     width: 20px !important; height: 20px !important;
 }
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"],
+[data-testid="stSidebarCollapsedControl"] [data-testid="stIconMaterial"],
+[data-testid="collapsedControl"] [data-testid="stIconMaterial"] {
+    font-size: 20px !important;
+    line-height: 1 !important;
+    color: var(--accent) !important;
+    /* Cette icone est une ligature : le contenu du span est le mot
+       « keyboard_double_arrow_right », que la police Material transforme en un
+       glyphe. Si la police n'arrive pas (reseau lent, hors ligne), le mot
+       s'affiche tel quel et le bouton s'etire sur 340 px. On le borne. */
+    max-width: 1.4em !important;
+    overflow: hidden !important;
+}
+/* L'en-tete est transparent et sans evenements tant qu'il est vide ; des qu'il
+   porte ce bouton il redevient cliquable, mais il faut qu'il reste au-dessus
+   du motif anime pose derriere le titre. */
+[data-testid="stHeader"] { z-index: 60 !important; }
 
 /* ── Ecriture ────────────────────────────────────────────────────────────── */
 /* L'interface etait ecrite trop petit : titres de section a 11 px, libelles de
@@ -791,7 +838,12 @@ CSS_MOBILE = """<style>
       flex-direction: column !important;
       gap: 10px !important;
   }
+  /* `column` etait le nom d'avant la 1.5x ; la 1.55 emet `stColumn`.
+     Les deux sont listes : sans le second, les colonnes ne se remettaient
+     pas en pile sur telephone et chaque graphique restait sur une demi-
+     largeur. */
   [data-testid="stHorizontalBlock"] > div,
+  [data-testid="stColumn"],
   [data-testid="column"] {
       width: 100% !important;
       flex: 1 1 100% !important;
@@ -869,7 +921,10 @@ CSS_MOBILE = """<style>
   [data-testid="stSidebar"] { min-width: 84vw !important; }
 
   /* Zone tactile portee a 44 px sur telephone. */
+  [data-testid="stExpandSidebarButton"],
+  [data-testid="stSidebarCollapsedControl"] button,
   [data-testid="stSidebarCollapsedControl"],
+  [data-testid="collapsedControl"] button,
   [data-testid="collapsedControl"] {
       min-height: 44px !important;
       padding: 8px 16px 8px 12px !important;
@@ -877,12 +932,14 @@ CSS_MOBILE = """<style>
 
   /* Navigation en pastilles : elles doivent tenir sur deux lignes et rester
      cliquables au pouce. */
-  [data-testid="stPills"] { margin-bottom: 14px !important; }
+  [data-testid="stButtonGroup"], [data-testid="stPills"] { margin-bottom: 14px !important; }
+  [data-testid="stButtonGroup"] div[role="group"],
   [data-testid="stPills"] div[role="group"] {
       display: flex !important;
       flex-wrap: wrap !important;
       gap: 8px !important;
   }
+  [data-testid="stButtonGroup"] button,
   [data-testid="stPills"] button {
       min-height: 40px !important;
       padding: 8px 16px !important;
