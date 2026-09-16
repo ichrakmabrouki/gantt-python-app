@@ -238,6 +238,7 @@ input:focus {
     background: var(--surface) !important; border: 1px solid var(--bordure) !important; color: var(--texte) !important; font-family: 'Inter', sans-serif !important; border-radius: 2px !important;
 }
 [data-testid="stSelectbox"] label { color: var(--texte) !important; }
+[data-testid="stButtonGroup"] button,
 [data-testid="stPills"] button {
     background: var(--surface) !important;
     border: 1px solid var(--bordure) !important;
@@ -248,11 +249,13 @@ input:focus {
     letter-spacing: 1px !important;
     min-height: 34px !important;
 }
+[data-testid="stButtonGroup"] button[aria-pressed="true"],
 [data-testid="stPills"] button[aria-pressed="true"] {
     background: color-mix(in srgb, var(--accent) 10%, transparent) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
 }
+[data-testid="stButtonGroup"] button:hover,
 [data-testid="stPills"] button:hover {
     border-color: var(--accent) !important;
     color: var(--accent) !important;
@@ -1483,14 +1486,61 @@ if est_mobile() and len(NAV_ITEMS) > 1:
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def chart_layout(**kwargs):
+    """Habillage commun des figures.
+
+    Deux details expliquaient que les graphiques paraissent serres.
+
+    Le premier : presque tous les appelants passent leur propre `xaxis` /
+    `yaxis`. Un `dict.update` remplace la valeur en bloc, donc ces dictionnaires
+    emportaient avec eux l'`automargin` et la taille des graduations definies
+    ici. Les axes sont maintenant fusionnes cle par cle : l'appelant precise ce
+    qui lui est propre, le reste survit.
+
+    Le second : la marge par defaut (10 px a gauche, 10 en haut) ne laissait de
+    place ni au titre d'axe ni aux etiquettes longues, que Plotly rognait ou
+    tassait contre le cadre.
+    """
+    axe = dict(
+        gridcolor=G_GRILLE,
+        automargin=True,                      # l'axe reclame la place qu'il faut
+        tickfont=dict(size=12, family="Inter", color=G_FAIBLE),
+        title=dict(font=dict(size=12, family="Inter", color=G_FAIBLE),
+                   standoff=12),
+    )
     base = dict(
         paper_bgcolor=G_PAPIER, plot_bgcolor=G_FOND,
-        font=dict(color=G_TEXTE, family="Inter", size=11),
-        margin=dict(l=10, r=10, t=30, b=10),
-        yaxis=dict(gridcolor=G_GRILLE), xaxis=dict(gridcolor=G_GRILLE),
+        font=dict(color=G_TEXTE, family="Inter", size=13),
+        margin=dict(l=16, r=16, t=48, b=52),
+        xaxis=dict(axe), yaxis=dict(axe),
     )
+
+    for nom in ("xaxis", "yaxis"):
+        surcharge = kwargs.pop(nom, None)
+        if not surcharge:
+            continue
+        fusion = dict(base[nom])
+        for cle, valeur in surcharge.items():
+            # `title="Minutes"` est accepte par Plotly, mais ecraserait la
+            # police et l'ecart definis plus haut : on ne remplace que le texte.
+            if cle == "title" and isinstance(valeur, str):
+                fusion["title"] = dict(base[nom]["title"], text=valeur)
+            else:
+                fusion[cle] = valeur
+        base[nom] = fusion
+
     base.update(kwargs)
     return base
+
+
+def deux_colonnes():
+    """Deux graphiques cote a cote sur ecran large, l'un sous l'autre sinon.
+
+    Cote a cote sur un telephone, chaque figure recoit moins de 180 px : les
+    etiquettes se chevauchent et les barres deviennent des traits.
+    """
+    if est_mobile():
+        return st.container(), st.container()
+    return st.columns(2, gap="large")
 
 def piece_label(job_id: int) -> str:
     piece_map = st.session_state.get("piece_map", {})
@@ -1983,7 +2033,13 @@ elif menu == "Planning":
                 palette=PAL,
                 mobile=est_mobile(),
             )
-            fig.update_layout(**chart_layout())
+            # Pas de chart_layout() ici : build_gantt pose deja les couleurs du
+            # theme, et surtout des marges calculees pour ce diagramme (place
+            # du titre en haut, de la legende horizontale en bas sur telephone).
+            # `update_layout` remplace `margin` en entier, pas cle par cle : la
+            # marge generique de 10 px ecrasait ce calcul, tassait le Gantt
+            # contre ses bords et rognait la legende.
+            fig.update_layout(paper_bgcolor=G_PAPIER)
             if est_mobile():
                 st.caption("Glisse le diagramme pour parcourir la journée, "
                            "pince pour zoomer.")
@@ -2238,7 +2294,7 @@ elif menu == "KPI":
                                 unsafe_allow_html=True)
 
             st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-            col_g1, col_g2 = st.columns(2)
+            col_g1, col_g2 = deux_colonnes()
             with col_g1:
                 st.markdown("<p class='section-title'>Utilisation par machine</p>",
                             unsafe_allow_html=True)
@@ -2466,7 +2522,7 @@ elif menu == "KPI":
             ))
             st.plotly_chart(fig_util, use_container_width=True)
 
-            col_g1, col_g2 = st.columns(2)
+            col_g1, col_g2 = deux_colonnes()
             with col_g1:
                 st.markdown("<p class='section-title'>Utilisation globale</p>", unsafe_allow_html=True)
                 fig_pie = go.Figure(go.Pie(
@@ -2515,7 +2571,7 @@ elif menu == "KPI":
                     st.markdown(
                         "<p class='section-title' style='margin-top:8px'>Profit & Marge par pièce</p>",
                         unsafe_allow_html=True)
-                    col_g3, col_g4 = st.columns(2)
+                    col_g3, col_g4 = deux_colonnes()
                     piece_labels_list = df_kpi["Pièce"].tolist() if "Pièce" in df_kpi.columns \
                                         else df_kpi["JobLabel"].tolist()
 
