@@ -12,6 +12,16 @@ import extra_streamlit_components as stx
 
 APP_DIR = Path(__file__).resolve().parent
 ICON_DIR = APP_DIR / "assets" / "icons"
+ICONES_3D_DIR = APP_DIR / "assets" / "icones3d"
+
+
+@st.cache_data(show_spinner=False)
+def icones_3d() -> dict:
+    """Icones 3D des methodes d'ordonnancement, en base64 (WebP, ~5 Ko chacune).
+    Lues une fois par processus : elles ne changent pas pendant la session."""
+    import base64
+    return {f.stem: base64.b64encode(f.read_bytes()).decode()
+            for f in ICONES_3D_DIR.glob("*.webp")}
 
 from backend.icons import icone
 from backend.ui_theme import PALETTE
@@ -2090,6 +2100,26 @@ elif menu == "KPI":
 
         prix_saved = st.session_state.get("prix_db", {})
 
+        # ── Couts saisis : une seule source, lue AVANT les onglets ────────
+        # L'onglet Performance est execute avant l'onglet Couts. Il lisait
+        # `kpi_params`, que l'onglet Couts ecrit plus bas dans le script : la
+        # valeur en euros utilisait donc les couts du tour PRECEDENT, et
+        # revenait a 50/20/10 des qu'on quittait la page KPI (Streamlit
+        # efface la cle d'un champ qui n'est plus affiche).
+        # Les champs du formulaire ecrivent leur cle AVANT la relance du
+        # script : en les lisant ici, tous les onglets voient la meme valeur.
+        COUTS_DEFAUT = {"cout_machine_h": 50.0, "cout_mo_h": 20.0,
+                        "cout_indirect_h": 10.0, "prix_matiere_unit": 5.0}
+        CLES_CHAMPS = {"cout_machine_h": "cout_machine", "cout_mo_h": "cout_mo",
+                       "cout_indirect_h": "cout_indirect",
+                       "prix_matiere_unit": "prix_matiere"}
+        couts = dict(COUTS_DEFAUT)
+        couts.update(st.session_state.get("kpi_params", {}))
+        for champ, cle in CLES_CHAMPS.items():
+            if cle in st.session_state:
+                couts[champ] = float(st.session_state[cle])
+        st.session_state["kpi_params"] = couts
+
         tab1, tab2, tab3, tab4 = st.tabs([
             "PERFORMANCE", "COÛTS PAR OF", "PROFIT & MARGE", "VISUALISATION"
         ])
@@ -2117,86 +2147,109 @@ elif menu == "KPI":
                     "La comparaison apparaît après une optimisation lancée "
                     "depuis la page Données.")
             else:
-                par_regle  = reference.get("par_regle", {})
-                fin_fifo   = int(par_regle.get("FIFO", reference["meilleure"]))
-                fin_best   = int(reference["meilleure"])
-                regle_best = reference.get("regle", "")
+                from backend.comparaison import (
+                    REGLES_INFO, MEILLEURE, gain, fin_de_reference,
+                    tableau_comparatif, valeur_estimee, cartes_methodes_html)
 
-                gain_min = fin_fifo - fin_optimise
-                gain_pct = (gain_min / fin_fifo * 100) if fin_fifo else 0.0
-                gain_best_pct = ((fin_best - fin_optimise) / fin_best * 100
-                                 if fin_best else 0.0)
-
-                params_cout = st.session_state.get("kpi_params", {
-                    "cout_machine_h": 50.0, "cout_mo_h": 20.0,
-                    "cout_indirect_h": 10.0, "prix_matiere_unit": 5.0})
-                cout_horaire = (params_cout["cout_machine_h"]
-                                + params_cout["cout_mo_h"]
-                                + params_cout["cout_indirect_h"])
-                economie = gain_min / 60 * cout_horaire
+                par_regle = {k: int(v) for k, v
+                             in reference.get("par_regle", {}).items()}
+                borne = infos_solveur.get("borne_inferieure")
 
                 def nb(valeur, decimales=0):
                     """Nombre a la francaise : espace fine, virgule decimale."""
                     texte = f"{valeur:,.{decimales}f}"
-                    return texte.replace(",", "\u202f").replace(".", ",")
+                    return texte.replace(",", " ").replace(".", ",")
+
+                # ── A quoi se compare-t-on ? ─────────────────────────────
+                # Le gain depend entierement de la reference. Plutot que de
+                # la choisir a la place de l'utilisateur, on la lui laisse :
+                # FIFO par defaut — c'est ce que fait un atelier sans methode
+                # — mais la meilleure des quatre regles est a un clic, pour
+                # qui veut le chiffre le plus prudent.
+                options = [r for r in REGLES_INFO if r in par_regle] + [MEILLEURE]
+                libelles = {r: r for r in REGLES_INFO}
+                libelles[MEILLEURE] = "La meilleure des 4"
+                choix = st.segmented_control(
+                    "COMPARER CP-SAT À", options,
+                    default="FIFO" if "FIFO" in par_regle else MEILLEURE,
+                    format_func=lambda o: libelles[o],
+                    key="reference_choisie",
+                    help="FIFO : ordre d'arrivée · SPT : plus courte d'abord · "
+                         "LPT : plus longue d'abord · MWKR : plus de travail "
+                         "restant. Chaque règle replanifie le même atelier, "
+                         "avec les mêmes contraintes que CP-SAT.")
+                # Cliquer sur l'option deja active la deselectionne.
+                choix = choix or ("FIFO" if "FIFO" in par_regle else MEILLEURE)
+
+                regle_ref, fin_ref = fin_de_reference(par_regle, choix)
+                gain_min, gain_pct = gain(fin_ref, fin_optimise)
+                economie, cout_horaire = valeur_estimee(gain_min, couts)
+                principe = REGLES_INFO[regle_ref]["principe"].rstrip(".").lower()
 
                 # ── La phrase d'abord ────────────────────────────────────
-                # Quatre chiffres alignes ne disent pas ce qu'ils comparent.
-                # On enonce donc le resultat en une phrase, avant de le
-                # detailler.
+                if gain_min >= 0:
+                    conclusion = (
+                        f"L'optimisation fait donc gagner "
+                        f"<b style='color:var(--succes)'>{nb(gain_min)} minutes, "
+                        f"soit {nb(gain_pct, 1)} %</b> du temps de production.")
+                else:
+                    # Un gain negatif se montre : le cacher serait tricher.
+                    conclusion = (
+                        f"Sur ce jeu de données, la règle {regle_ref} fait mieux "
+                        f"de <b>{nb(-gain_min)} minutes</b> — relancer en mode "
+                        f"Précis laisse plus de temps au solveur.")
                 st.markdown(
                     f"<p style='font-size:1.05rem;line-height:1.75;color:var(--texte);"
-                    f"margin:0 0 18px 0;max-width:62ch'>"
-                    f"Le planning calculé termine le lot en "
+                    f"margin:6px 0 18px 0;max-width:66ch'>"
+                    f"Le planning calculé par CP-SAT termine le lot en "
                     f"<b style='color:var(--accent)'>{nb(fin_optimise)} minutes</b>. "
-                    f"En lançant les pièces dans leur ordre d'arrivée, comme le fait "
-                    f"un atelier sans outil d'ordonnancement, il aurait fallu "
-                    f"<b>{nb(fin_fifo)} minutes</b>.<br>"
-                    f"L'optimisation fait donc gagner "
-                    f"<b style='color:var(--succes)'>{nb(gain_min)} minutes, "
-                    f"soit {nb(gain_pct, 1)} %</b> du temps de production."
-                    f"</p>", unsafe_allow_html=True)
+                    f"Avec la règle <b>{regle_ref}</b> — {principe} —, il aurait "
+                    f"fallu <b>{nb(fin_ref)} minutes</b>.<br>{conclusion}</p>",
+                    unsafe_allow_html=True)
 
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("SANS OPTIMISATION",  f"{nb(fin_fifo)} min")
-                c2.metric("AVEC L'APPLICATION", f"{nb(fin_optimise)} min")
-                c3.metric("TEMPS GAGNÉ",        f"{nb(gain_pct, 1)} %",
-                          delta=f"-{nb(gain_min)} min", delta_color="inverse")
-                c4.metric("VALEUR ESTIMÉE",     f"{nb(economie)} €",
-                          help=f"Temps gagné converti au coût horaire d'atelier "
-                               f"saisi dans l'onglet Coûts ({nb(cout_horaire)} €/h : "
-                               f"machine + main-d'œuvre + indirect). C'est une "
-                               f"estimation de la capacité libérée, pas une "
-                               f"économie encaissée.")
+                c1.metric(f"SANS OPTIMISATION · {regle_ref}", f"{nb(fin_ref)} min")
+                c2.metric("AVEC L'APPLICATION · CP-SAT", f"{nb(fin_optimise)} min")
+                c3.metric("TEMPS GAGNÉ", f"{nb(gain_pct, 1)} %",
+                          delta=f"{'-' if gain_min >= 0 else '+'}{nb(abs(gain_min))} min",
+                          delta_color="inverse")
+                c4.metric("VALEUR ESTIMÉE", f"{nb(economie)} €",
+                          help="Capacité libérée, pas une économie encaissée : "
+                               "c'est ce que coûteraient les minutes gagnées "
+                               "au coût horaire de l'atelier.")
+                # Le cout horaire utilise est ecrit en clair, pas cache dans
+                # une info-bulle : c'est l'hypothese dont depend le chiffre.
+                st.caption(
+                    f"Valeur calculée à **{nb(cout_horaire)} €/h** "
+                    f"(machine {nb(couts['cout_machine_h'])} + main-d'œuvre "
+                    f"{nb(couts['cout_mo_h'])} + indirect "
+                    f"{nb(couts['cout_indirect_h'])}) — les coûts saisis dans "
+                    f"l'onglet COÛTS PAR OF.")
 
-                # ── Le detail ────────────────────────────────────────────
-                st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+                # ── Le graphique ─────────────────────────────────────────
+                st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
                 st.markdown(
                     "<p style='color:var(--texteFaible);margin-bottom:4px'>"
-                    "Le même atelier, planifié de plusieurs façons. "
+                    "Le même atelier, planifié par cinq méthodes. "
                     "Plus la barre est courte, plus le lot est terminé tôt.</p>",
                     unsafe_allow_html=True)
 
+                lignes_cmp = tableau_comparatif(par_regle, fin_optimise, borne)
                 etiquettes, valeurs, couleurs = [], [], []
-                noms_regles = {
-                    "FIFO": "Sans outil — dans l'ordre d'arrivée",
-                    "SPT":  "Sans outil — les plus courtes d'abord",
-                    "LPT":  "Sans outil — les plus longues d'abord",
-                    "MWKR": "Sans outil — pièces les plus chargées",
-                }
-                for cle, nom in noms_regles.items():
-                    if cle in par_regle:
-                        etiquettes.append(nom)
-                        valeurs.append(int(par_regle[cle]))
-                        couleurs.append(G_GRILLE)
-                etiquettes.append("Avec l'application")
-                valeurs.append(fin_optimise)
-                couleurs.append(G_APLAT)
-                borne = infos_solveur.get("borne_inferieure")
-                if borne:
-                    etiquettes.append("Impossible de faire mieux")
-                    valeurs.append(int(borne))
-                    couleurs.append(G_INFO)
+                for l in lignes_cmp:
+                    if l["_type"] == "regle":
+                        etiquettes.append(f"{l['Méthode']} — {l['Principe']}")
+                        # La reference choisie ressort : c'est elle que
+                        # les quatre chiffres du dessus comparent.
+                        couleurs.append(G_ALERTE if l["Méthode"] == regle_ref
+                                        else G_GRILLE)
+                    elif l["_type"] == "cpsat":
+                        etiquettes.append("CP-SAT — l'application")
+                        couleurs.append(G_APLAT)
+                    else:
+                        etiquettes.append("Borne — impossible de faire mieux")
+                        couleurs.append(G_INFO)
+                    valeurs.append(l["Fin du lot (min)"])
 
                 fig_ref = go.Figure(go.Bar(
                     x=valeurs, y=etiquettes, orientation="h",
@@ -2207,7 +2260,7 @@ elif menu == "KPI":
                     hovertemplate="%{y}<br>%{x} min<extra></extra>",
                 ))
                 fig_ref.update_layout(**chart_layout(
-                    height=70 + 44 * len(valeurs),
+                    height=70 + 46 * len(valeurs),
                     showlegend=False,
                     font=dict(color=G_TEXTE, family="Inter", size=13),
                     xaxis=dict(title="Fin du lot (minutes)", gridcolor=G_GRILLE,
@@ -2218,37 +2271,46 @@ elif menu == "KPI":
                 ))
                 st.plotly_chart(fig_ref, use_container_width=True)
 
-                # Le raisonnement complet reste accessible, sans encombrer.
-                with st.expander("D'où vient cette comparaison ?"):
-                    st.markdown(
-                        f"**Le problème.** Un planning qui finit en "
-                        f"{nb(fin_optimise)} minutes, c'est bien ou c'est "
-                        f"mauvais ? Le chiffre seul ne répond pas : il lui faut "
-                        f"un point de comparaison.\n\n"
-                        f"**La comparaison retenue.** Le même atelier, les mêmes "
-                        f"pièces, les mêmes machines sont replanifiés avec quatre "
-                        f"règles de priorité classiques — celles qu'applique un "
-                        f"chef d'atelier, ou un logiciel de suivi de production "
-                        f"sans module d'optimisation. Chacune remplit le planning "
-                        f"au fil de l'eau, et chacune respecte exactement les "
-                        f"mêmes contraintes que le solveur : gammes, changements "
-                        f"de série, disponibilité des techniciens.\n\n"
-                        f"**Le résultat.** Face à la pratique la plus répandue — "
-                        f"lancer les pièces dans leur ordre d'arrivée — "
-                        f"l'application fait gagner **{nb(gain_pct, 1)} %**. "
-                        f"Face à la meilleure des quatre règles "
-                        f"({nb(fin_best)} min), elle gagne encore "
-                        f"**{nb(gain_best_pct, 1)} %**. Les deux chiffres sont "
-                        f"donnés : ne montrer que le premier reviendrait à se "
-                        f"comparer au pire.\n\n"
-                        f"**La dernière barre** est la limite théorique : aucun "
-                        f"ordonnancement, quel qu'il soit, ne peut terminer plus "
-                        f"tôt. Elle dit ce qu'il reste à gagner — "
-                        f"{(infos_solveur.get('ecart_optimalite') or 0.0):.1%} ici.\n\n"
-                        f"Chaque planning de comparaison est relu par le même "
-                        f"vérificateur que les résultats du solveur avant "
-                        f"affichage : une référence irréalisable serait "
-                        f"artificiellement longue, et gonflerait le gain.")
+                # ── Le tableau ───────────────────────────────────────────
+                # Les memes chiffres, lisibles d'un coup d'oeil et copiables.
+                st.markdown(
+                    f"<p class='section-title'>{icon_img('icon-kpi.png', 18)} "
+                    f"CP-SAT face aux règles de priorité</p>",
+                    unsafe_allow_html=True)
+                fmt = lambda v, suffixe, dec=0: ("—" if v is None
+                                                 else f"{nb(v, dec)} {suffixe}")
+                st.dataframe(
+                    pd.DataFrame([{
+                        "Méthode":        l["Méthode"],
+                        "Principe":       l["Principe"],
+                        "Fin du lot":     fmt(l["Fin du lot (min)"], "min"),
+                        "CP-SAT gagne":   fmt(l["CP-SAT gagne (min)"], "min"),
+                        "Gain de CP-SAT": fmt(l["CP-SAT gagne (%)"], "%", 1),
+                    } for l in lignes_cmp]),
+                    hide_index=True, use_container_width=True)
+
+                # ── Les methodes, expliquees ─────────────────────────────
+                # Auparavant repliees dans un encart que peu de visiteurs
+                # ouvraient. Les cartes restent visibles : c'est la partie
+                # qui explique d'ou vient le gain affiche plus haut.
+                st.markdown(
+                    f"<p class='section-title'>{icon_img('icon-chart.png', 18)} "
+                    f"Comment chaque méthode ordonnance l'atelier</p>",
+                    unsafe_allow_html=True)
+                st.markdown(
+                    cartes_methodes_html(
+                        par_regle, fin_optimise, borne, regle_ref, icones_3d(),
+                        infos_solveur.get("ecart_optimalite")),
+                    unsafe_allow_html=True)
+                st.markdown(
+                    "<p class='methodes-note'>Les quatre règles replanifient le même "
+                    "atelier comme le ferait un chef d'atelier : à chaque étape, "
+                    "elles choisissent une opération prête et la placent sur la "
+                    "machine qui la terminera le plus tôt, en respectant les mêmes "
+                    "contraintes que CP-SAT. Chaque planning est relu par un "
+                    "vérificateur indépendant : une comparaison fausse serait "
+                    "retirée plutôt qu'affichée.</p>",
+                    unsafe_allow_html=True)
 
 
             # ── Indicateurs d'atelier ────────────────────────────────────
@@ -2330,16 +2392,16 @@ elif menu == "KPI":
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     cout_machine_h = st.number_input("COÛT MACHINE (€/H)", min_value=0.0,
-                                                      value=50.0, step=5.0, key="cout_machine")
+                                                      value=couts["cout_machine_h"], step=5.0, key="cout_machine")
                 with col2:
                     cout_mo_h = st.number_input("COÛT MAIN-D'ŒUVRE (€/H)", min_value=0.0,
-                                                 value=20.0, step=2.0, key="cout_mo")
+                                                 value=couts["cout_mo_h"], step=2.0, key="cout_mo")
                 with col3:
                     cout_indirect_h = st.number_input("COÛT INDIRECT (€/H)", min_value=0.0,
-                                                       value=10.0, step=1.0, key="cout_indirect")
+                                                       value=couts["cout_indirect_h"], step=1.0, key="cout_indirect")
                 with col4:
                     prix_matiere_unit = st.number_input("MATIÈRE (€/UNITÉ)", min_value=0.0,
-                                                         value=5.0, step=0.5, key="prix_matiere")
+                                                         value=couts["prix_matiere_unit"], step=0.5, key="prix_matiere")
                 st.form_submit_button("APPLIQUER LES COÛTS", use_container_width=True)
 
             st.session_state["kpi_params"] = {

@@ -821,6 +821,128 @@ hr { border-color: var(--verre-bord) !important; }
     [data-testid="stMetric"]:hover, .dl-card:hover,
     .stButton > button:hover { transform: none !important; }
 }
+
+/* ── Cartes des methodes d'ordonnancement (onglet Performance) ─────────── */
+/* Fond orange, texte blanc. L'orange vif de l'application (#FF7A1A) ne
+   laisse au blanc qu'un contraste de 2,6:1 : le degrade part de cet orange
+   pour l'icone et descend vers un orange brule la ou se trouve le texte
+   (4,7 a 5,3:1, au-dessus du seuil de lisibilite de 4,5:1). */
+.methodes-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin: 10px 0 12px 0;
+}
+.methode-carte {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px 16px 16px;
+    border-radius: 18px;
+    background: linear-gradient(150deg, #F07A22 0%, #D9600F 30%, #C2510B 58%, #B0430A 100%);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    box-shadow: 0 16px 32px -20px rgba(255, 122, 26, 0.95),
+                inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.methode-carte, .methode-carte * {
+    color: #FFFFFF !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+}
+.methode-carte.reference { box-shadow: 0 0 0 3px #FFFFFF, 0 16px 32px -20px rgba(255, 122, 26, 0.95) !important; }
+.methode-carte.cpsat     { box-shadow: 0 0 0 3px #FFC24A, 0 16px 32px -18px rgba(255, 194, 74, 0.9) !important; }
+.methode-carte .methode-tete { display: flex; align-items: center; gap: 14px; min-height: 76px; }
+.methode-carte .methode-icone {
+    /* Les icones gardent leurs proportions : largeur fixe, hauteur libre. */
+    width: 88px; height: auto; max-height: 76px; object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 6px 8px rgba(70, 20, 0, 0.35));
+}
+.methode-carte .methode-titres { flex: 1; min-width: 0; }
+.methode-carte .methode-sigle {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 1.6rem !important; font-weight: 700 !important; line-height: 1.05 !important;
+}
+.methode-carte .methode-nom {
+    font-size: 0.78rem !important; font-weight: 700 !important; line-height: 1.3 !important;
+    letter-spacing: 0.08em !important; text-transform: uppercase !important;
+    opacity: 0.95;
+}
+.methode-carte .methode-texte {
+    font-size: 0.92rem !important; line-height: 1.5 !important;
+    text-shadow: 0 1px 1px rgba(80, 25, 0, 0.35);
+    flex: 1;
+}
+.methode-carte .methode-resultat { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.methode-carte .methode-minutes {
+    background: #FFFFFF; color: #8A3606 !important;
+    font-weight: 800 !important; font-size: 0.98rem !important;
+    border-radius: 999px; padding: 3px 12px; line-height: 1.4 !important;
+}
+.methode-carte .methode-ecart { font-size: 0.84rem !important; font-weight: 700 !important; }
+.methode-carte .methode-badge {
+    /* Dans le flux, au-dessus du sigle : plus de chevauchement. */
+    display: inline-block; margin-bottom: 4px;
+    background: rgba(40, 14, 0, 0.38); border-radius: 999px; padding: 2px 9px;
+    font-size: 0.66rem !important; font-weight: 800 !important; letter-spacing: 0.1em !important;
+    text-transform: uppercase !important; line-height: 1.5 !important;
+}
+
+/* ── Choix de la methode de reference : l'option retenue doit se voir ───── */
+/* Le style global des boutons ecrase celui de Streamlit : sans cette regle,
+   l'option active a exactement l'apparence des autres. */
+[data-testid="stBaseButton-segmented_controlActive"] {
+    background: linear-gradient(135deg, #FF7A1A, #E0620C) !important;
+    border-color: #FF9A4D !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 0 0 1px rgba(255, 154, 77, 0.45), 0 6px 16px -8px rgba(255, 122, 26, 0.9) !important;
+}
+[data-testid="stBaseButton-segmented_controlActive"] * { color: #FFFFFF !important; font-weight: 700 !important; }
+.methodes-note { color: var(--texteFaible) !important; font-size: 0.86rem !important; line-height: 1.6 !important; max-width: 90ch; }
+
+/* ── Icones Streamlit : rendre sa police a l'icone ───────────────────────── */
+/* Streamlit dessine ses icones avec un MOT — « keyboard_arrow_right » — que
+   seule la police Material Symbols transforme en fleche (ligature). La
+   feuille principale impose Inter a tous les elements (`*`, `body *`) : le mot
+   s'affichait alors en toutes lettres et chevauchait le titre des filtres et
+   des encarts repliables (« FILTRER PAR MACHINE », « D'où viennent ces
+   chiffres ? »).
+   On rend donc a chaque icone la police et les reglages qu'attend Streamlit
+   (Icon/Material/styled-components.ts, tag 1.55.0). La largeur est bornee :
+   si la police n'arrivait pas, le mot serait coupe au lieu de deborder. */
+[data-testid="stIconMaterial"],
+[data-testid="stAppViewContainer"] [data-testid="stIconMaterial"],
+[data-testid="stSidebar"] [data-testid="stIconMaterial"],
+[data-testid="stExpander"] details summary [data-testid="stIconMaterial"],
+[data-testid="stExpander"] summary span[data-testid="stIconMaterial"],
+button [data-testid="stIconMaterial"] {
+    font-family: 'Material Symbols Rounded' !important;
+    font-weight: 400 !important;
+    font-style: normal !important;
+    font-size: 1.25rem !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
+    font-feature-settings: "liga" !important;
+    -webkit-font-feature-settings: "liga" !important;
+    -webkit-font-smoothing: antialiased !important;
+    display: inline-flex !important;
+    max-width: 1.3em !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    flex-shrink: 0 !important;
+}
+/* Titre d'un encart repliable : l'icone a sa place a gauche, le texte ensuite,
+   sans chevauchement. */
+[data-testid="stExpander"] details summary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
 </style>"""
 
 
